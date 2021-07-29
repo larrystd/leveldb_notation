@@ -20,6 +20,7 @@
 
 namespace leveldb {
 
+/// 状态
 class LEVELDB_EXPORT Status {
  public:
   // Create a success status.
@@ -29,6 +30,7 @@ class LEVELDB_EXPORT Status {
   Status(const Status& rhs);
   Status& operator=(const Status& rhs);
 
+  // 移动构造
   Status(Status&& rhs) noexcept : state_(rhs.state_) { rhs.state_ = nullptr; }
   Status& operator=(Status&& rhs) noexcept;
 
@@ -82,6 +84,7 @@ class LEVELDB_EXPORT Status {
   //    state_[5..]  == message
   const char* state_;
 
+  // 不限定作用域的枚举
   enum Code {
     kOk = 0,
     kNotFound = 1,
@@ -91,6 +94,7 @@ class LEVELDB_EXPORT Status {
     kIOError = 5
   };
 
+  /// 状态state_ 翻译成枚举整型
   Code code() const {
     return (state_ == nullptr) ? kOk : static_cast<Code>(state_[4]);
   }
@@ -105,7 +109,7 @@ inline Status::Status(const Status& rhs) {
 inline Status& Status::operator=(const Status& rhs) {
   // The following condition catches both aliasing (when this == &rhs),
   // and the common case where both rhs and *this are ok.
-  if (state_ != rhs.state_) {
+  if (state_ != rhs.state_) { 
     delete[] state_;
     state_ = (rhs.state_ == nullptr) ? nullptr : CopyState(rhs.state_);
   }

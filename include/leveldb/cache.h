@@ -26,6 +26,8 @@ namespace leveldb {
 
 class LEVELDB_EXPORT Cache;
 
+/// 缓存
+
 // Create a new cache with a fixed size capacity.  This implementation
 // of Cache uses a least-recently-used eviction policy.
 LEVELDB_EXPORT Cache* NewLRUCache(size_t capacity);
@@ -34,6 +36,7 @@ class LEVELDB_EXPORT Cache {
  public:
   Cache() = default;
 
+  // 不可拷贝
   Cache(const Cache&) = delete;
   Cache& operator=(const Cache&) = delete;
 

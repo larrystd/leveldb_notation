@@ -73,6 +73,8 @@ class LEVELDB_EXPORT Env {
   // NotFound status when the file does not exist.
   //
   // The returned file will only be accessed by one thread at a time.
+
+  /// 顺序读的文件
   virtual Status NewSequentialFile(const std::string& fname,
                                    SequentialFile** result) = 0;
 
@@ -84,6 +86,8 @@ class LEVELDB_EXPORT Env {
   // not exist.
   //
   // The returned file may be concurrently accessed by multiple threads.
+
+  /// 支持随机读的文件
   virtual Status NewRandomAccessFile(const std::string& fname,
                                      RandomAccessFile** result) = 0;
 
@@ -94,6 +98,8 @@ class LEVELDB_EXPORT Env {
   // returns non-OK.
   //
   // The returned file will only be accessed by one thread at a time.
+
+  // 支持可写的文件
   virtual Status NewWritableFile(const std::string& fname,
                                  WritableFile** result) = 0;
 
@@ -112,6 +118,7 @@ class LEVELDB_EXPORT Env {
   virtual Status NewAppendableFile(const std::string& fname,
                                    WritableFile** result);
 
+  /// 文件处理的一些函数
   // Returns true iff the named file exists.
   virtual bool FileExists(const std::string& fname) = 0;
 
@@ -168,6 +175,7 @@ class LEVELDB_EXPORT Env {
       void (*function)(void* arg),
       void* arg) = 0;
 
+  /// 线程
   // Start a new thread, invoking "function(arg)" within the new thread.
   // When "function(arg)" returns, the thread will be destroyed.
   virtual void StartThread(void (*function)(void* arg), void* arg) = 0;
@@ -261,6 +269,7 @@ class LEVELDB_EXPORT WritableFile {
 };
 
 // An interface for writing log messages.
+// 日志文件
 class LEVELDB_EXPORT Logger {
  public:
   Logger() = default;

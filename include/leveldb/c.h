@@ -40,6 +40,10 @@
 #ifndef STORAGE_LEVELDB_INCLUDE_C_H_
 #define STORAGE_LEVELDB_INCLUDE_C_H_
 
+
+/// 如果是cpp语言, 利用extern "C" 说明下面代码用C编译, 编译链接遵循C语言的规则
+/// 其他C语言代码可顺利引用extern "C"中的函数等。
+
 #ifdef __cplusplus
 extern "C" {
 #endif

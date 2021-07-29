@@ -11,12 +11,15 @@
 #include "leveldb/iterator.h"
 #include "leveldb/options.h"
 
+
+// 数据库接口
 namespace leveldb {
 
 // Update CMakeLists.txt if you change these
 static const int kMajorVersion = 1;
 static const int kMinorVersion = 21;
 
+/// 声明类
 struct Options;
 struct ReadOptions;
 struct WriteOptions;
@@ -25,12 +28,14 @@ class WriteBatch;
 // Abstract handle to particular state of a DB.
 // A Snapshot is an immutable object and can therefore be safely
 // accessed from multiple threads without any external synchronization.
+/// Snapshot 快照是不可变的对象, 线程安全
 class LEVELDB_EXPORT Snapshot {
  protected:
   virtual ~Snapshot();
 };
 
 // A range of keys
+/// key范围, 输入为Slice
 struct LEVELDB_EXPORT Range {
   Slice start;          // Included in the range
   Slice limit;          // Not included in the range
@@ -42,6 +47,7 @@ struct LEVELDB_EXPORT Range {
 // A DB is a persistent ordered map from keys to values.
 // A DB is safe for concurrent access from multiple threads without
 // any external synchronization.
+/// 排序后的key-value数据库, 线程安全
 class LEVELDB_EXPORT DB {
  public:
   // Open the database with the specified "name".
@@ -49,20 +55,23 @@ class LEVELDB_EXPORT DB {
   // OK on success.
   // Stores nullptr in *dbptr and returns a non-OK status on error.
   // Caller should delete *dbptr when it is no longer needed.
+  /// dbptr是数据库指针, 该指针可修改, 故传指针的指针
   static Status Open(const Options& options,
                      const std::string& name,
                      DB** dbptr);
-
+  /// 构造函数
   DB() = default;
 
+  /// DB不可拷贝
   DB(const DB&) = delete;
   DB& operator=(const DB&) = delete;
-
+  /// 虚析构函数
   virtual ~DB();
 
   // Set the database entry for "key" to "value".  Returns OK on success,
   // and a non-OK status on error.
   // Note: consider setting options.sync = true.
+  /// Put是写操作, 添加键值对
   virtual Status Put(const WriteOptions& options,
                      const Slice& key,
                      const Slice& value) = 0;
@@ -71,11 +80,13 @@ class LEVELDB_EXPORT DB {
   // success, and a non-OK status on error.  It is not an error if "key"
   // did not exist in the database.
   // Note: consider setting options.sync = true.
+  /// Delete也是写操作, 删除键值对
   virtual Status Delete(const WriteOptions& options, const Slice& key) = 0;
 
   // Apply the specified updates to the database.
   // Returns OK on success, non-OK on failure.
   // Note: consider setting options.sync = true.
+  /// 将WriteBatch类的updates写入到DB中
   virtual Status Write(const WriteOptions& options, WriteBatch* updates) = 0;
 
   // If the database contains an entry for "key" store the
@@ -85,10 +96,12 @@ class LEVELDB_EXPORT DB {
   // a status for which Status::IsNotFound() returns true.
   //
   // May return some other Status on an error.
+  // 读操作, 
   virtual Status Get(const ReadOptions& options,
                      const Slice& key, std::string* value) = 0;
 
   // Return a heap-allocated iterator over the contents of the database.
+  // 返回db的迭代器
   // The result of NewIterator() is initially invalid (caller must
   // call one of the Seek methods on the iterator before using it).
   //
@@ -100,6 +113,7 @@ class LEVELDB_EXPORT DB {
   // this handle will all observe a stable snapshot of the current DB
   // state.  The caller must call ReleaseSnapshot(result) when the
   // snapshot is no longer needed.
+  // 当前db状态的快照
   virtual const Snapshot* GetSnapshot() = 0;
 
   // Release a previously acquired snapshot.  The caller must not
@@ -145,6 +159,8 @@ class LEVELDB_EXPORT DB {
   // end==nullptr is treated as a key after all keys in the database.
   // Therefore the following call will compact the entire database:
   //    db->CompactRange(nullptr, nullptr);
+
+  // compact db
   virtual void CompactRange(const Slice* begin, const Slice* end) = 0;
 };
 

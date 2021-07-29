@@ -7,7 +7,7 @@
 
 #if !defined(LEVELDB_EXPORT)
 
-#if defined(LEVELDB_SHARED_LIBRARY)
+#if defined(LEVELDB_SHARED_LIBRARY)   // 共享库
 #if defined(_WIN32)
 
 #if defined(LEVELDB_COMPILE_LIBRARY)
@@ -17,10 +17,11 @@
 #endif  // defined(LEVELDB_COMPILE_LIBRARY)
 
 #else  // defined(_WIN32)
+
 #if defined(LEVELDB_COMPILE_LIBRARY)
 #define LEVELDB_EXPORT __attribute__((visibility("default")))
 #else
-#define LEVELDB_EXPORT
+#define LEVELDB_EXPORT  // !_WIN32
 #endif
 #endif  // defined(_WIN32)
 

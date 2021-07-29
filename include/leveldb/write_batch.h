@@ -18,6 +18,9 @@
 // non-const method, all threads accessing the same WriteBatch must use
 // external synchronization.
 
+// 一批写入的update
+// 可多线程访问const函数, 非const函数需要加同步
+
 #ifndef STORAGE_LEVELDB_INCLUDE_WRITE_BATCH_H_
 #define STORAGE_LEVELDB_INCLUDE_WRITE_BATCH_H_
 

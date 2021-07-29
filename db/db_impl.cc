@@ -38,6 +38,7 @@
 
 namespace leveldb {
 
+// Cache file
 const int kNumNonTableCacheFiles = 10;
 
 // Information kept for every waiting writer
@@ -46,7 +47,8 @@ struct DBImpl::Writer {
   WriteBatch* batch;
   bool sync;
   bool done;
-  port::CondVar cv;
+
+  port::CondVar cv; // 条件变量
 
   explicit Writer(port::Mutex* mu) : cv(mu) { }
 };

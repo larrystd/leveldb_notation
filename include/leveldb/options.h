@@ -10,6 +10,7 @@
 
 namespace leveldb {
 
+/// 前向声明
 class Cache;
 class Comparator;
 class Env;
@@ -21,6 +22,8 @@ class Snapshot;
 // sequence of key,value pairs.  Each block may be compressed before
 // being stored in a file.  The following enum describes which
 // compression method (if any) is used to compress a block.
+
+/// 在存储到文件之前每个块需要被压缩, 描述了压缩类型
 enum CompressionType {
   // NOTE: do not change the values of existing entries, as these are
   // part of the persistent format on disk.
@@ -34,6 +37,7 @@ struct LEVELDB_EXPORT Options {
   // Parameters that affect behavior
 
   // Comparator used to define the order of keys in the table.
+  /// COmparator用来定义table中key的顺序
   // Default: a comparator that uses lexicographic byte-wise ordering
   //
   // REQUIRES: The client must ensure that the comparator supplied
@@ -93,6 +97,7 @@ struct LEVELDB_EXPORT Options {
   // block size specified here corresponds to uncompressed data.  The
   // actual size of the unit read from disk may be smaller if
   // compression is enabled.  This parameter can be changed dynamically.
+  // 块大小 4kb
   size_t block_size = 4 * 1024;
 
   // Number of keys between restart points for delta encoding of keys.

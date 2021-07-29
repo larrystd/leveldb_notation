@@ -10,6 +10,7 @@
 
 namespace leveldb {
 
+/// 前向声明
 class Slice;
 
 // A Comparator object provides a total order across slices that are
@@ -55,8 +56,8 @@ class LEVELDB_EXPORT Comparator {
 };
 
 // Return a builtin comparator that uses lexicographic byte-wise
-// ordering.  The result remains the property of this module and
-// must not be deleted.
+// ordering.  The  remains the property of this module and
+// must not be deleted.result
 LEVELDB_EXPORT const Comparator* BytewiseComparator();
 
 }  // namespace leveldb

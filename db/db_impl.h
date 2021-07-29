@@ -18,16 +18,22 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
+
+/// DB 的实现代码
 namespace leveldb {
 
+/// memory table
 class MemTable;
 class TableCache;
+/// Version
 class Version;
 class VersionEdit;
 class VersionSet;
 
+
 class DBImpl : public DB {
  public:
+ // 构造和析构函数
   DBImpl(const Options& options, const std::string& dbname);
   virtual ~DBImpl();
 
@@ -98,6 +104,7 @@ class DBImpl : public DB {
                         VersionEdit* edit, SequenceNumber* max_sequence)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // 写入到level0的table
   Status WriteLevel0Table(MemTable* mem, VersionEdit* edit, Version* base)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
