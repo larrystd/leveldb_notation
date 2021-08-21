@@ -53,6 +53,8 @@ struct DBImpl::Writer {
   explicit Writer(port::Mutex* mu) : cv(mu) { }
 };
 
+
+
 struct DBImpl::CompactionState {
   Compaction* const compaction;
 
@@ -124,6 +126,8 @@ static int TableCacheSize(const Options& sanitized_options) {
   return sanitized_options.max_open_files - kNumNonTableCacheFiles;
 }
 
+
+/// 构造函数
 DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
     : env_(raw_options.env),
       internal_comparator_(raw_options.comparator),
@@ -179,7 +183,10 @@ DBImpl::~DBImpl() {
   }
 }
 
+/// 创建DB时, 并设置对应的log文件
 Status DBImpl::NewDB() {
+  /// new_db是VersionEdit
+  /// 设置VersionEdit状态
   VersionEdit new_db;
   new_db.SetComparatorName(user_comparator()->Name());
   new_db.SetLogNumber(0);
@@ -188,22 +195,33 @@ Status DBImpl::NewDB() {
 
   const std::string manifest = DescriptorFileName(dbname_, 1);
   WritableFile* file;
+  /// 创建manifest文件, 返回*file
   Status s = env_->NewWritableFile(manifest, &file);
   if (!s.ok()) {
     return s;
   }
+
   {
+    /// 用WritableFile manifest构建log::writer
     log::Writer log(file);
+
+    /// record包含了VersionEdit的序列化状态信息
+    /// 状态用一个record序列化表示
     std::string record;
     new_db.EncodeTo(&record);
+    /// 增加一条记录
     s = log.AddRecord(record);
     if (s.ok()) {
       s = file->Close();
     }
   }
+
   delete file;
   if (s.ok()) {
     // Make "CURRENT" file that points to the new manifest file.
+    // manifest文件记录version信息, 以若干record表示
+    // manifest第一条record是一个version的快照, 后续record是增量变化
+    // 每当sstable文件有新增或者减少, leveldb会生成新的version
     s = SetCurrentFile(env_, dbname_, 1);
   } else {
     env_->DeleteFile(manifest);
@@ -220,6 +238,7 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
   }
 }
 
+/// 删除文件, 事先需要判定文件是否需要删除
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
 
@@ -234,12 +253,17 @@ void DBImpl::DeleteObsoleteFiles() {
   versions_->AddLiveFiles(&live);
 
   std::vector<std::string> filenames;
+  /// 目录下的文件
   env_->GetChildren(dbname_, &filenames);  // Ignoring errors on purpose
   uint64_t number;
   FileType type;
+  
   for (size_t i = 0; i < filenames.size(); i++) {
+    // 解析文件的属性
     if (ParseFileName(filenames[i], &number, &type)) {
       bool keep = true;
+
+      /// 文件是否保留
       switch (type) {
         case kLogFile:
           keep = ((number >= versions_->LogNumber()) ||
@@ -265,6 +289,7 @@ void DBImpl::DeleteObsoleteFiles() {
           break;
       }
 
+      /// 文件属于不保留类型, 删除之
       if (!keep) {
         if (type == kTableFile) {
           table_cache_->Evict(number);
@@ -278,6 +303,7 @@ void DBImpl::DeleteObsoleteFiles() {
   }
 }
 
+/// 恢复
 Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   mutex_.AssertHeld();
 
@@ -291,6 +317,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
     return s;
   }
 
+  /// 恢复文件是否齐全
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) {
       s = NewDB();
@@ -308,6 +335,8 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
     }
   }
 
+  /// 恢复version，并把version放入双向链表versionset中
+  /// 恢复了数据库的version
   s = versions_->Recover(save_manifest);
   if (!s.ok()) {
     return s;
@@ -321,21 +350,31 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   // Note that PrevLogNumber() is no longer used, but we pay
   // attention to it in case we are recovering a database
   // produced by an older version of leveldb.
+  /// log_number存在于versions中
   const uint64_t min_log = versions_->LogNumber();
   const uint64_t prev_log = versions_->PrevLogNumber();
   std::vector<std::string> filenames;
+
+  /// 获取dbname_下日志文件名
   s = env_->GetChildren(dbname_, &filenames);
   if (!s.ok()) {
     return s;
   }
   std::set<uint64_t> expected;
+
   versions_->AddLiveFiles(&expected);
   uint64_t number;
   FileType type;
   std::vector<uint64_t> logs;
+
+  /// 以下是判断filenames是否能全部被ParseFileName, 全部为version所需要的LiveFiles
+  /// 如果是, expected最后为空
+  /// 如果否，恢复缺少文件不可恢复
   for (size_t i = 0; i < filenames.size(); i++) {
+    /// 分析dbname_下日志文件， 获取其log_number
     if (ParseFileName(filenames[i], &number, &type)) {
       expected.erase(number);
+      /// log_number符合要求的为恢复所需要的的日志
       if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
         logs.push_back(number);
     }
@@ -348,8 +387,10 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   }
 
   // Recover in the order in which the logs were generated
+  /// 对log_number排序
   std::sort(logs.begin(), logs.end());
   for (size_t i = 0; i < logs.size(); i++) {
+    /// 根据logs[i](log_number)的日志恢复
     s = RecoverLogFile(logs[i], (i == logs.size() - 1), save_manifest, edit,
                        &max_sequence);
     if (!s.ok()) {
@@ -369,6 +410,8 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   return Status::OK();
 }
 
+
+/// 根据日志恢复， 基于log_number, VersionEdit
 Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
                               bool* save_manifest, VersionEdit* edit,
                               SequenceNumber* max_sequence) {
@@ -388,6 +431,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   mutex_.AssertHeld();
 
   // Open the log file
+  /// 打开log_number的日志文件
   std::string fname = LogFileName(dbname_, log_number);
   SequentialFile* file;
   Status status = env_->NewSequentialFile(fname, &file);
@@ -406,6 +450,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   // paranoid_checks==false so that corruptions cause entire commits
   // to be skipped instead of propagating bad information (like overly
   // large sequence numbers).
+
+  /// 读取日志文件
   log::Reader reader(file, &reporter, true/*checksum*/,
                      0/*initial_offset*/);
   Log(options_.info_log, "Recovering log #%llu",
@@ -417,6 +463,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   WriteBatch batch;
   int compactions = 0;
   MemTable* mem = nullptr;
+
+  /// 读取日志文件中的记录
   while (reader.ReadRecord(&record, &scratch) &&
          status.ok()) {
     if (record.size() < 12) {
@@ -424,12 +472,16 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
           record.size(), Status::Corruption("log record too small"));
       continue;
     }
+
+    /// record表示成WriteBatchInternal
     WriteBatchInternal::SetContents(&batch, record);
 
     if (mem == nullptr) {
       mem = new MemTable(internal_comparator_);
       mem->Ref();
     }
+
+    /// WriteBatchInternal中的内容
     status = WriteBatchInternal::InsertInto(&batch, mem);
     MaybeIgnoreError(&status);
     if (!status.ok()) {
@@ -445,6 +497,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       compactions++;
       *save_manifest = true;
+
+      /// 写入到SST中
       status = WriteLevel0Table(mem, edit, nullptr);
       mem->Unref();
       mem = nullptr;
@@ -492,6 +546,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   return status;
 }
 
+
+/// 写入到SSST Level0 table中
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();

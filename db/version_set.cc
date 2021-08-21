@@ -812,6 +812,7 @@ void VersionSet::AppendVersion(Version* v) {
   v->Ref();
 
   // Append to linked list
+  /// version双向链表
   v->prev_ = dummy_versions_.prev_;
   v->next_ = &dummy_versions_;
   v->prev_->next_ = v;
@@ -903,6 +904,8 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   return s;
 }
 
+
+/// 恢复
 Status VersionSet::Recover(bool *save_manifest) {
   struct LogReporter : public log::Reader::Reporter {
     Status* status;
@@ -912,7 +915,10 @@ Status VersionSet::Recover(bool *save_manifest) {
   };
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
+  /// 读取current file, 用来找到manifest文件
   std::string current;
+
+  /// 读取current中内容
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
     return s;
@@ -922,8 +928,11 @@ Status VersionSet::Recover(bool *save_manifest) {
   }
   current.resize(current.size() - 1);
 
+  /// current这里表示的CURRENT文件的内容
   std::string dscname = dbname_ + "/" + current;
   SequentialFile* file;
+
+  // 这里只是生成一个新的内存结构体，指向已经有的文件, 并且是按照只读的方式来打开。
   s = env_->NewSequentialFile(dscname, &file);
   if (!s.ok()) {
     if (s.IsNotFound()) {
@@ -941,14 +950,19 @@ Status VersionSet::Recover(bool *save_manifest) {
   uint64_t last_sequence = 0;
   uint64_t log_number = 0;
   uint64_t prev_log_number = 0;
+  /// Builder 作用VersionEdit增量和
   Builder builder(this, current_);
 
   {
     LogReporter reporter;
     reporter.status = &s;
+
+    /// 读取file
     log::Reader reader(file, &reporter, true/*checksum*/, 0/*initial_offset*/);
     Slice record;
     std::string scratch;
+
+    /// 读取记录
     while (reader.ReadRecord(&record, &scratch) && s.ok()) {
       VersionEdit edit;
       s = edit.DecodeFrom(record);
@@ -962,6 +976,11 @@ Status VersionSet::Recover(bool *save_manifest) {
       }
 
       if (s.ok()) {
+
+        /// 应用(递增每一个edit), builder相当于前缀和
+        //version0 + record_a = version1
+        //version1 + record_b = version2
+        //version2 + record_c = version3
         builder.Apply(&edit);
       }
 
@@ -1007,10 +1026,14 @@ Status VersionSet::Recover(bool *save_manifest) {
   }
 
   if (s.ok()) {
+
+    /// 创建一个version, 把builder放入
     Version* v = new Version(this);
     builder.SaveTo(v);
     // Install recovered version
     Finalize(v);
+
+    // 把最后的version放到VersionSet里面
     AppendVersion(v);
     manifest_file_number_ = next_file;
     next_file_number_ = next_file + 1;

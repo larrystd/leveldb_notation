@@ -44,8 +44,10 @@ void PutFixed64(std::string* dst, uint64_t value) {
   dst->append(buf, sizeof(buf));
 }
 
+/// 编码方式, 基本原理是当uint32数值比较小的时候，其实一个字节就够了
 char* EncodeVarint32(char* dst, uint32_t v) {
   // Operate on characters as unsigneds
+
   unsigned char* ptr = reinterpret_cast<unsigned char*>(dst);
   static const int B = 128;
   if (v < (1<<7)) {

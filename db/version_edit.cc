@@ -38,6 +38,8 @@ void VersionEdit::Clear() {
   new_files_.clear();
 }
 
+/// VersionEdit通过EncodeTo函数序列化
+/// 序列化(Serialization)将对象的状态信息转换为可以存储或传输的形式。 
 void VersionEdit::EncodeTo(std::string* dst) const {
   if (has_comparator_) {
     PutVarint32(dst, kComparator);
