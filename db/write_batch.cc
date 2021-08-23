@@ -57,9 +57,11 @@ Status WriteBatch::Iterate(Handler* handler) const {
     char tag = input[0];
     input.remove_prefix(1);
     switch (tag) {
+      /// 写入还是删除tag
       case kTypeValue:
         if (GetLengthPrefixedSlice(&input, &key) &&
             GetLengthPrefixedSlice(&input, &value)) {
+          /// 写入
           handler->Put(key, value);
         } else {
           return Status::Corruption("bad WriteBatch Put");
@@ -102,6 +104,7 @@ void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq) {
 void WriteBatch::Put(const Slice& key, const Slice& value) {
   WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
   rep_.push_back(static_cast<char>(kTypeValue));
+  /// 序列化
   PutLengthPrefixedSlice(&rep_, key);
   PutLengthPrefixedSlice(&rep_, value);
 }
@@ -117,6 +120,7 @@ void WriteBatch::Append(const WriteBatch &source) {
 }
 
 namespace {
+/// 在MemTable增加数据
 class MemTableInserter : public WriteBatch::Handler {
  public:
   SequenceNumber sequence_;
@@ -135,6 +139,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
 Status WriteBatchInternal::InsertInto(const WriteBatch* b,
                                       MemTable* memtable) {
+  
   MemTableInserter inserter;
   inserter.sequence_ = WriteBatchInternal::Sequence(b);
   inserter.mem_ = memtable;

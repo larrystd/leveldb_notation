@@ -187,6 +187,7 @@ class LookupKey {
   // Return a key suitable for lookup in a MemTable.
   Slice memtable_key() const { return Slice(start_, end_ - start_); }
 
+  /// internalkey = uKey + sequence_number(7 bytes) + type(1 byte)
   // Return an internal key (suitable for passing to an internal iterator)
   Slice internal_key() const { return Slice(kstart_, end_ - kstart_); }
 

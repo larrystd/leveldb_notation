@@ -79,6 +79,7 @@ Iterator* MemTable::NewIterator() {
   return new MemTableIterator(&table_);
 }
 
+//// 在memtable中添加数据
 void MemTable::Add(SequenceNumber s, ValueType type,
                    const Slice& key,
                    const Slice& value) {
@@ -102,6 +103,8 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   p = EncodeVarint32(p, val_size);
   memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
+
+  // typedef SkipList<const char*, KeyComparator> Table;
   table_.Insert(buf);
 }
 

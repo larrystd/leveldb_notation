@@ -14,8 +14,10 @@ namespace leveldb {
 
 class VersionSet;
 
+///VersionEdit的主要作用是当SST变化时, 记录是哪个层的哪个文件发生了变化（如新增删除
+/// 文件元数据
 struct FileMetaData {
-  int refs;
+  int refs;   // 引用计数
   int allowed_seeks;          // Seeks allowed until compaction
   uint64_t number;
   uint64_t file_size;         // File size in bytes
@@ -32,10 +34,13 @@ class VersionEdit {
 
   void Clear();
 
+  /// 比较器
   void SetComparatorName(const Slice& name) {
     has_comparator_ = true;
     comparator_ = name.ToString();
   }
+
+  /// VersionEdit的log_number_
   void SetLogNumber(uint64_t num) {
     has_log_number_ = true;
     log_number_ = num;
@@ -44,10 +49,12 @@ class VersionEdit {
     has_prev_log_number_ = true;
     prev_log_number_ = num;
   }
+
   void SetNextFile(uint64_t num) {
     has_next_file_number_ = true;
     next_file_number_ = num;
   }
+
   void SetLastSequence(SequenceNumber seq) {
     has_last_sequence_ = true;
     last_sequence_ = seq;
@@ -63,6 +70,7 @@ class VersionEdit {
                uint64_t file_size,
                const InternalKey& smallest,
                const InternalKey& largest) {
+    /// 设置file元数据
     FileMetaData f;
     f.number = file;
     f.file_size = file_size;
@@ -76,6 +84,7 @@ class VersionEdit {
     deleted_files_.insert(std::make_pair(level, file));
   }
 
+  /// 序列化
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(const Slice& src);
 
@@ -86,20 +95,20 @@ class VersionEdit {
 
   typedef std::set< std::pair<int, uint64_t> > DeletedFileSet;
 
-  std::string comparator_;
-  uint64_t log_number_;
+  std::string comparator_;  // 比较器
+  uint64_t log_number_;   // 日志编号
   uint64_t prev_log_number_;
   uint64_t next_file_number_;
-  SequenceNumber last_sequence_;
+  SequenceNumber last_sequence_;  // SSTable 中的最大的 sequence number, SequenceNumber越大表示时间越新
   bool has_comparator_;
   bool has_log_number_;
   bool has_prev_log_number_;
   bool has_next_file_number_;
   bool has_last_sequence_;
 
-  std::vector< std::pair<int, InternalKey> > compact_pointers_;
-  DeletedFileSet deleted_files_;
-  std::vector< std::pair<int, FileMetaData> > new_files_;
+  std::vector< std::pair<int, InternalKey> > compact_pointers_;   // 每一层要下一次 compaction 的起始 key
+  DeletedFileSet deleted_files_;  /// 要删除的文件set
+  std::vector< std::pair<int, FileMetaData> > new_files_; /// 新的SST file, level:FileMetaData
 };
 
 }  // namespace leveldb

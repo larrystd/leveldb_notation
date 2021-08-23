@@ -23,6 +23,7 @@ enum Tag {
   kPrevLogNumber        = 9
 };
 
+/// clear VersionEdit的内容
 void VersionEdit::Clear() {
   comparator_.clear();
   log_number_ = 0;
@@ -38,8 +39,9 @@ void VersionEdit::Clear() {
   new_files_.clear();
 }
 
-/// VersionEdit通过EncodeTo函数序列化
+/// VersionEdit通过EncodeTo函数序列化成string
 /// 序列化(Serialization)将对象的状态信息转换为可以存储或传输的形式。 
+/// 序列化的内容包括kComparator, kLogNumber等字段
 void VersionEdit::EncodeTo(std::string* dst) const {
   if (has_comparator_) {
     PutVarint32(dst, kComparator);
@@ -67,7 +69,7 @@ void VersionEdit::EncodeTo(std::string* dst) const {
     PutVarint32(dst, compact_pointers_[i].first);  // level
     PutLengthPrefixedSlice(dst, compact_pointers_[i].second.Encode());
   }
-
+  /// 序列化每个level需要删除的文件
   for (DeletedFileSet::const_iterator iter = deleted_files_.begin();
        iter != deleted_files_.end();
        ++iter) {
@@ -75,11 +77,11 @@ void VersionEdit::EncodeTo(std::string* dst) const {
     PutVarint32(dst, iter->first);   // level
     PutVarint64(dst, iter->second);  // file number
   }
-
+  /// 序列化每个level新增文件的信息
   for (size_t i = 0; i < new_files_.size(); i++) {
     const FileMetaData& f = new_files_[i].second;
     PutVarint32(dst, kNewFile);
-    PutVarint32(dst, new_files_[i].first);  // level
+    PutVarint32(dst, new_files_[i].first);  // level 层
     PutVarint64(dst, f.number);
     PutVarint64(dst, f.file_size);
     PutLengthPrefixedSlice(dst, f.smallest.Encode());
@@ -87,6 +89,7 @@ void VersionEdit::EncodeTo(std::string* dst) const {
   }
 }
 
+/// 从序列化后的Slice获取Key或Level
 static bool GetInternalKey(Slice* input, InternalKey* dst) {
   Slice str;
   if (GetLengthPrefixedSlice(input, &str)) {
@@ -108,6 +111,7 @@ static bool GetLevel(Slice* input, int* level) {
   }
 }
 
+/// 从Slice中反序列化
 Status VersionEdit::DecodeFrom(const Slice& src) {
   Clear();
   Slice input = src;

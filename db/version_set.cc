@@ -20,6 +20,8 @@
 
 namespace leveldb {
 
+/// 一些静态方法, 返回数据库的一些属性
+
 static size_t TargetFileSize(const Options* options) {
   return options->max_file_size;
 }
@@ -37,6 +39,7 @@ static int64_t ExpandedCompactionByteSizeLimit(const Options* options) {
   return 25 * TargetFileSize(options);
 }
 
+/// 每层的最大容量
 static double MaxBytesForLevel(const Options* options, int level) {
   // Note: the result for level zero is not really used since we set
   // the level-0 compaction threshold based on number of files.
@@ -55,6 +58,7 @@ static uint64_t MaxFileSizeForLevel(const Options* options, int level) {
   return TargetFileSize(options);
 }
 
+/// 传入FileMetaData*, 返回总文件大小
 static int64_t TotalFileSize(const std::vector<FileMetaData*>& files) {
   int64_t sum = 0;
   for (size_t i = 0; i < files.size(); i++) {
@@ -63,16 +67,18 @@ static int64_t TotalFileSize(const std::vector<FileMetaData*>& files) {
   return sum;
 }
 
+/// Version析构
 Version::~Version() {
   assert(refs_ == 0);
 
   // Remove from linked list
+  /// Version从VersionSet中移除
   prev_->next_ = next_;
   next_->prev_ = prev_;
 
   // Drop references to files
-  for (int level = 0; level < config::kNumLevels; level++) {
-    for (size_t i = 0; i < files_[level].size(); i++) {
+  for (int level = 0; level < config::kNumLevels; level++) {  /// 每个level
+    for (size_t i = 0; i < files_[level].size(); i++) { /// Version, 指出数据库的file, 但compaction之后可能删除一些文件
       FileMetaData* f = files_[level][i];
       assert(f->refs > 0);
       f->refs--;
@@ -88,9 +94,11 @@ int FindFile(const InternalKeyComparator& icmp,
              const Slice& key) {
   uint32_t left = 0;
   uint32_t right = files.size();
+
+  /// 从left, right二分查找文件, files是FileMetaData的vector
   while (left < right) {
     uint32_t mid = (left + right) / 2;
-    const FileMetaData* f = files[mid];
+    const FileMetaData* f = files[mid]; 
     if (icmp.InternalKeyComparator::Compare(f->largest.Encode(), key) < 0) {
       // Key at "mid.largest" is < "target".  Therefore all
       // files at or before "mid" are uninteresting.
@@ -104,6 +112,8 @@ int FindFile(const InternalKeyComparator& icmp,
   return right;
 }
 
+
+/// 是否是后面的文件
 static bool AfterFile(const Comparator* ucmp,
                       const Slice* user_key, const FileMetaData* f) {
   // null user_key occurs before all keys and is therefore never after *f
@@ -265,6 +275,7 @@ struct Saver {
   std::string* value;
 };
 }
+
 static void SaveValue(void* arg, const Slice& ikey, const Slice& v) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   ParsedInternalKey parsed_key;
@@ -663,6 +674,7 @@ class VersionSet::Builder {
   }
 
   // Apply all of the edits in *edit to the current state.
+
   void Apply(VersionEdit* edit) {
     // Update compaction pointers
     for (size_t i = 0; i < edit->compact_pointers_.size(); i++) {
@@ -672,6 +684,7 @@ class VersionSet::Builder {
     }
 
     // Delete files
+    /// 记录可删除文件到各level对应的deleted_files
     const VersionEdit::DeletedFileSet& del = edit->deleted_files_;
     for (VersionEdit::DeletedFileSet::const_iterator iter = del.begin();
          iter != del.end();
@@ -682,6 +695,8 @@ class VersionSet::Builder {
     }
 
     // Add new files
+    /// 更新对应 level 的added_files：
+    /// file其实只是若干文件指针, 占用空间很小
     for (size_t i = 0; i < edit->new_files_.size(); i++) {
       const int level = edit->new_files_[i].first;
       FileMetaData* f = new FileMetaData(edit->new_files_[i].second);
@@ -819,7 +834,10 @@ void VersionSet::AppendVersion(Version* v) {
   v->next_->prev_ = v;
 }
 
+
+/// Version 升级到另一个Version中间靠的是VersionEdit。这个过程是LogAndApply。
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
+  /// VersionEdit的log_number_
   if (edit->has_log_number_) {
     assert(edit->log_number_ >= log_number_);
     assert(edit->log_number_ < next_file_number_);
@@ -833,13 +851,16 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   edit->SetNextFile(next_file_number_);
   edit->SetLastSequence(last_sequence_);
-
+  /// 将edit应用于current_生成一个新的Version
   Version* v = new Version(this);
   {
+    /// 处理VersionEdit, 形成Version
     Builder builder(this, current_);
     builder.Apply(edit);
     builder.SaveTo(v);
   }
+
+  /// 判定下一次Compaction应该从which level 开始
   Finalize(v);
 
   // Initialize new descriptor log file if necessary by creating
@@ -864,7 +885,9 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     mu->Unlock();
 
     // Write new record to MANIFEST log
+    /// 将MANIFEST更新之
     if (s.ok()) {
+      /// 增加MANIFEST记录
       std::string record;
       edit->EncodeTo(&record);
       s = descriptor_log_->AddRecord(record);
@@ -878,6 +901,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
     // If we just created a new descriptor file, install it by writing a
     // new CURRENT file that points to it.
+    /// CURRENT file
     if (s.ok() && !new_manifest_file.empty()) {
       s = SetCurrentFile(env_, dbname_, manifest_file_number_);
     }
@@ -886,6 +910,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   }
 
   // Install the new version
+  /// 新Version添加到双向链表
   if (s.ok()) {
     AppendVersion(v);
     log_number_ = edit->log_number_;

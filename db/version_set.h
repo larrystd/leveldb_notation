@@ -55,6 +55,8 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            const Slice* smallest_user_key,
                            const Slice* largest_user_key);
 
+/// Version, 记录当前数据库储存的文件
+/// Version 只记录SST的文件, 没有memtable的log文件
 class Version {
  public:
   // Append to *iters a sequence of iterators that will
@@ -128,12 +130,14 @@ class Version {
                           void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
+  /// 储存VersionSet指针和在VersionSet中的位置
   VersionSet* vset_;            // VersionSet to which this Version belongs
   Version* next_;               // Next version in linked list
   Version* prev_;               // Previous version in linked list
   int refs_;                    // Number of live refs to this version
 
   // List of files per level
+  /// Version存储的文件
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
@@ -307,8 +311,9 @@ class VersionSet {
   // Opened lazily
   WritableFile* descriptor_file_;
   log::Writer* descriptor_log_;
+
   Version dummy_versions_;  // Head of circular doubly-linked list of versions.
-  Version* current_;        // == dummy_versions_.prev_
+  Version* current_;        // == dummy_versions_.prev_, current version
 
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
