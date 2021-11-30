@@ -43,16 +43,16 @@ namespace leveldb
   const int kNumNonTableCacheFiles = 10;
 
   // Information kept for every waiting writer
-  struct DBImpl::Writer
+  struct DBImpl::Writer // 执行db写的对象
   {
     Status status;
-    WriteBatch *batch;
+    WriteBatch *batch;  // Batch
     bool sync;
     bool done;
 
     port::CondVar cv; // 条件变量
 
-    explicit Writer(port::Mutex *mu) : cv(mu) {}
+    explicit Writer(port::Mutex *mu) : cv(mu) {}  // 写要加锁
   };
 
   struct DBImpl::CompactionState
@@ -151,8 +151,8 @@ namespace leveldb
         db_lock_(nullptr),
         shutting_down_(false),
         background_work_finished_signal_(&mutex_),
-        mem_(nullptr),
-        imm_(nullptr),
+        mem_(nullptr),  // mutable MemTable
+        imm_(nullptr),  // Immutable MemTable
         has_imm_(false),
         logfile_(nullptr),
         logfile_number_(0),
@@ -199,57 +199,29 @@ namespace leveldb
       delete options_.block_cache;
     }
   }
-
-  /// 创建DB时, 并设置对应的log文件
-  ///leveldb的日志文件主要分为三种：
-
-  ///记录key-value的日志文件  log_.addRecord() 写日志是顺序写，和随机写相比，效率要高得多
-  /// 每个memtable都会生成一个日志文件，而log_日志文件总是记录的是当前memtable中的key-value，也就是说当这个memtable转变成imm_等待被写入磁盘时，就会另生成一个log_，这个新的log_指向新的mem_
-  /// 旧日志文件会被删掉
-  /// Version就代表了一个版本，它包括当前磁盘及内存中的所有文件信息。VersionEdit记录了基于上一Version增加了多少文件，删除了文件
-  /// Version里面有一个log_number_的数据成员，这个数据成员所表示的日志文件总是指向最旧的没有写入磁盘的memtable。当imm_没有写入时，他就指向imm_，imm_写入时，它就指向当前的mem_。这样就可以保证，只要memtable在内存中，则它所对应的日志文件不会被删除。
-  /// Version的log_number可以恢复memtable数据, 对于SST的数据有 对应的文件
-
-  ///记录版本信息变化(VersionEdit)的日志文件(manifest文件)
-  /// Manifest 文件其实就是一个 log 文件，一个 log record 就是一个 VersionEdit。
-  /// version 记录 compaction 之后，数据库由哪些文件组成, 记录文件属于哪个 version.
-
-  /// VersionSet 是一个 Version 的集合,同一时刻可能存在多个 Version
-  /// Version和VersionEdit都是针对SST的文件，SST一变化, 会生成一个VersionEdit
-
-  ///CURRENT文件
-  ///current_指向VersionSet链表的尾部元素，即为最新的Version。
   
-  ///VersionEdit应用到VersionSet上的过程封装成VersionSet::Builder
-  Status DBImpl::NewDB()
+  Status DBImpl::NewDB()  // 新建数据库
   {
-    /// new_db是VersionEdit
-    /// 设置VersionEdit状态
-    VersionEdit new_db;
+    VersionEdit new_db; // new_db是一个VersionEdit
     new_db.SetComparatorName(user_comparator()->Name());
     new_db.SetLogNumber(0);
     new_db.SetNextFile(2);
     new_db.SetLastSequence(0);
 
-    const std::string manifest = DescriptorFileName(dbname_, 1);
+    const std::string manifest = DescriptorFileName(dbname_, 1);  // manifest存储Version, 也就是记录SST的元信息
     WritableFile *file;
-    /// 创建manifest文件, 返回*file
-    Status s = env_->NewWritableFile(manifest, &file);
+    Status s = env_->NewWritableFile(manifest, &file);  // manifest文件用来存储VersionEdit的内容, 是该版本下SST file的清单
     if (!s.ok())
     {
       return s;
     }
 
     {
-      /// 用WritableFile manifest构建log::writer
-      log::Writer log(file);
+      log::Writer log(file);  // manifest可以认为是Version的日志(区分增删改查日志log), 用log对象处理
 
-      /// record包含了VersionEdit的序列化状态信息
-      /// 状态用一个record序列化表示
       std::string record;
-      new_db.EncodeTo(&record);
-      /// 增加一条记录
-      s = log.AddRecord(record);
+      new_db.EncodeTo(&record); // 
+      s = log.AddRecord(record);  // 向manifest写入一条记录
       if (s.ok())
       {
         s = file->Close();
@@ -259,11 +231,7 @@ namespace leveldb
     delete file;
     if (s.ok())
     {
-      // Make "CURRENT" file that points to the new manifest file.
-      // manifest文件记录version信息, 以若干record表示
-      // manifest第一条record是一个version的快照, 后续record是增量变化
-      // 每当sstable文件有新增或者减少, leveldb会生成新的version
-      s = SetCurrentFile(env_, dbname_, 1);
+      s = SetCurrentFile(env_, dbname_, 1); // 一个VersionEdit一个manifest文件清单, current_文件存储最近的manifest文件
     }
     else
     {
@@ -285,8 +253,7 @@ namespace leveldb
     }
   }
 
-  /// 删除文件, 事先需要判定文件是否需要删除
-  void DBImpl::DeleteObsoleteFiles()
+  void DBImpl::DeleteObsoleteFiles()  // 清理文件
   {
     mutex_.AssertHeld();
 
@@ -302,20 +269,17 @@ namespace leveldb
     versions_->AddLiveFiles(&live);
 
     std::vector<std::string> filenames;
-    /// 目录下的文件
     env_->GetChildren(dbname_, &filenames); // Ignoring errors on purpose
     uint64_t number;
     FileType type;
 
     for (size_t i = 0; i < filenames.size(); i++)
     {
-      // 解析文件的属性
       if (ParseFileName(filenames[i], &number, &type))
       {
         bool keep = true;
 
-        /// 文件是否保留
-        switch (type)
+        switch (type) // 文件类型
         {
         case kLogFile:
           keep = ((number >= versions_->LogNumber()) ||
@@ -341,8 +305,7 @@ namespace leveldb
           break;
         }
 
-        /// 文件属于不保留类型, 删除之
-        if (!keep)
+        if (!keep)         // 文件属于不保留类型, 删除之
         {
           if (type == kTableFile)
           {
@@ -357,8 +320,7 @@ namespace leveldb
     }
   }
 
-  /// 恢复, 如果恢复途中需要写文件到SST0, 则修改VersionEdit
-  Status DBImpl::Recover(VersionEdit *edit, bool *save_manifest)
+  Status DBImpl::Recover(VersionEdit *edit, bool *save_manifest)   // 恢复数据库, 如果恢复途中需要写文件到SST0, 则修改VersionEdit
   {
     mutex_.AssertHeld();
 
@@ -373,8 +335,7 @@ namespace leveldb
       return s;
     }
 
-    /// 恢复文件是否齐全
-    if (!env_->FileExists(CurrentFileName(dbname_)))
+    if (!env_->FileExists(CurrentFileName(dbname_)))  // 检查所需恢复文件是否齐全
     {
       if (options_.create_if_missing)
       {
@@ -399,9 +360,7 @@ namespace leveldb
       }
     }
 
-    /// 恢复version，并把version放入双向链表versionset中
-    /// 恢复了数据库的version
-    s = versions_->Recover(save_manifest);
+    s = versions_->Recover(save_manifest);  // 利用Versions_恢复到current指向版本的文件(最近版本)
     if (!s.ok())
     {
       return s;
@@ -419,39 +378,29 @@ namespace leveldb
     const uint64_t min_log = versions_->LogNumber();
     const uint64_t prev_log = versions_->PrevLogNumber();
     std::vector<std::string> filenames;
-
-    /// 获取dbname_下日志文件名
-    s = env_->GetChildren(dbname_, &filenames);
+    s = env_->GetChildren(dbname_, &filenames); // 可能用到的所有用于恢复的文件
     if (!s.ok())
     {
       return s;
     }
     std::set<uint64_t> expected;
-    /// 目前有效的文件
     versions_->AddLiveFiles(&expected);
     uint64_t number;
     FileType type;
-    std::vector<uint64_t> logs;
+    std::vector<uint64_t> logs; 
 
-    /// 以下是判断filenames是否能全部被ParseFileName, 全部为version所需要的LiveFiles
-    /// 如果是, expected最后为空
-    /// 如果否，恢复缺少文件不可恢复
-    /// 恢复只需要根据日志恢复出memtable的文件
     for (size_t i = 0; i < filenames.size(); i++)
     {
-      /// 查询分析dbname_下日志文件， 获取其log_number
-      if (ParseFileName(filenames[i], &number, &type))
+      if (ParseFileName(filenames[i], &number, &type))  // 解析文件
       {
-        /// 这一行判断可分析的文件都有效
+        // 解析文件成功擦除该文件
         expected.erase(number);
-        /// 类型为kLogFile日志文件, log_number符合要求的为恢复所需要的的日志
         if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
-          logs.push_back(number);
+          logs.push_back(number); // 如果是能用到的日志文件,加入logs
       }
     }
 
-    /// 前面expected.erase,  expectedy应该为空
-    if (!expected.empty())
+    if (!expected.empty())  // 恢复存在的文件都存在, expected为空
     {
       char buf[50];
       snprintf(buf, sizeof(buf), "%d missing files; e.g.",
@@ -460,13 +409,11 @@ namespace leveldb
     }
 
     // Recover in the order in which the logs were generated
-    /// 对log_number排序, log_number_为日志文件, 用来恢复memtable内存中的数据
-    std::sort(logs.begin(), logs.end());
+    std::sort(logs.begin(), logs.end());  // 日志按照lognumber排序
     for (size_t i = 0; i < logs.size(); i++)
     {
-      /// 根据logs[i](log_number)的日志恢复
       s = RecoverLogFile(logs[i], (i == logs.size() - 1), save_manifest, edit,
-                         &max_sequence);
+                         &max_sequence);  // 利用日志恢复memtable的文件
       if (!s.ok())
       {
         return s;
@@ -486,10 +433,9 @@ namespace leveldb
     return Status::OK();
   }
 
-  /// 根据日志回放恢复memtable的文件， 基于log_number
   Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
                                 bool *save_manifest, VersionEdit *edit,
-                                SequenceNumber *max_sequence)
+                                SequenceNumber *max_sequence)   // 根据日志回放恢复memtable的文件
   {
     struct LogReporter : public log::Reader::Reporter
     {
@@ -531,9 +477,8 @@ namespace leveldb
     // to be skipped instead of propagating bad information (like overly
     // large sequence numbers).
 
-    /// 读取日志文件
     log::Reader reader(file, &reporter, true /*checksum*/,
-                       0 /*initial_offset*/);
+                       0 /*initial_offset*/);     // 读取日志文件
     Log(options_.info_log, "Recovering log #%llu",
         (unsigned long long)log_number);
 
@@ -544,9 +489,8 @@ namespace leveldb
     int compactions = 0;
     MemTable *mem = nullptr;
 
-    /// 读取日志文件中的记录
     while (reader.ReadRecord(&record, &scratch) &&
-           status.ok())
+           status.ok())     // 读取日志文件中的记录， 到record
     {
       if (record.size() < 12)
       {
@@ -555,17 +499,16 @@ namespace leveldb
         continue;
       }
 
-      /// record表示成WriteBatchInternal
-      WriteBatchInternal::SetContents(&batch, record);
-      /// 创建内存表
+      WriteBatchInternal::SetContents(&batch, record);  // record加入WriteBatchInternal
+
       if (mem == nullptr)
       {
-        mem = new MemTable(internal_comparator_);
+        mem = new MemTable(internal_comparator_);       // 创建MemTable, 这个应该是Immutable MemTable
         mem->Ref();
       }
 
-      /// WriteBatchInternal中的内容送入到内存表Memtable中
-      status = WriteBatchInternal::InsertInto(&batch, mem);
+
+      status = WriteBatchInternal::InsertInto(&batch, mem);       // WriteBatchInternal中的内容送入到内存表Memtable中
       MaybeIgnoreError(&status);
       if (!status.ok())
       {
@@ -579,15 +522,13 @@ namespace leveldb
         *max_sequence = last_seq;
       }
 
-      //// 如果恢复数据大，要从Memtable写入到Level0 SST中
-      if (mem->ApproximateMemoryUsage() > options_.write_buffer_size)
+      if (mem->ApproximateMemoryUsage() > options_.write_buffer_size)       // 如果恢复数据大，要从Memtable写入到Level0 SST中
       {
-        compactions++;
+        compactions++;  // compactions次数
         *save_manifest = true;
 
-        /// 写入到SST中
-        status = WriteLevel0Table(mem, edit, nullptr);
-        mem->Unref();
+        status = WriteLevel0Table(mem, edit, nullptr);         /// memtable写入到SST L0中
+        mem->Unref(); // 写入到level0的mem删除之
         mem = nullptr;
         if (!status.ok())
         {
@@ -626,7 +567,7 @@ namespace leveldb
         }
       }
     }
-
+    // 从日志恢复的mem内容会写入到SST l0中
     if (mem != nullptr)
     {
       // mem did not get reused; compact it.
@@ -641,9 +582,8 @@ namespace leveldb
     return status;
   }
 
-  /// 写入到SST Level0 table中
   Status DBImpl::WriteLevel0Table(MemTable *mem, VersionEdit *edit,
-                                  Version *base)
+                                  Version *base)    // memtable写入到SST Level0 table中
   {
     mutex_.AssertHeld(); /// 需要同步
 
@@ -652,16 +592,14 @@ namespace leveldb
     meta.number = versions_->NewFileNumber();
     pending_outputs_.insert(meta.number);
 
-    Iterator *iter = mem->NewIterator();
+    Iterator *iter = mem->NewIterator();  // memtable的迭代器
     Log(options_.info_log, "Level-0 table #%llu: started",
         (unsigned long long)meta.number);
 
     Status s;
     {
-      /// 创建一个Table
-      /// 用迭代器iter指向的数据写入
-      mutex_.Unlock();
-      s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+      mutex_.Unlock();  
+      s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta); // 根据iter指向的数据创建Table
       mutex_.Lock();
     }
 
@@ -683,7 +621,7 @@ namespace leveldb
       {
         level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
       }
-      /// 修改VersionEdit
+      // VersionEdit加minor compaction中一些file数据meta存储
       edit->AddFile(level, meta.number, meta.file_size,
                     meta.smallest, meta.largest);
     }
@@ -695,10 +633,10 @@ namespace leveldb
     return s;
   }
 
-  /// Minor Compaction
-  void DBImpl::CompactMemTable()
+
+  void DBImpl::CompactMemTable()   // Minor Compaction执行
   {
-    /// memtable会慢慢 转化成 sstable。
+    /// memtable 转化成 sstable。
 
     /// MinorCompaction，指的是 immutable memtable持久化为 sst 文件。
     /// Major Compaction，指的是 sst 文件之间的 compaction。
@@ -710,8 +648,8 @@ namespace leveldb
     VersionEdit edit;
     Version *base = versions_->current();
     base->Ref();
-    /// 将memtable转储写入到SST0
-    Status s = WriteLevel0Table(imm_, &edit, base);
+
+    Status s = WriteLevel0Table(imm_, &edit, base);    // 将Im memtable转储写入到SST0
     base->Unref();
 
     if (s.ok() && shutting_down_.load(std::memory_order_acquire))
@@ -719,12 +657,12 @@ namespace leveldb
       s = Status::IOError("Deleting DB during memtable compaction");
     }
 
-    // Replace immutable memtable with the generated Table
+    // Replace immutable memtable with the generated Table, 一个min compactor, 生成一个Version
     if (s.ok())
     {
       edit.SetPrevLogNumber(0);
       edit.SetLogNumber(logfile_number_); // Earlier logs no longer needed
-      s = versions_->LogAndApply(&edit, &mutex_);
+      s = versions_->LogAndApply(&edit, &mutex_); // 基于VersionEdit形成新的Version, 加入到VersionSet
     }
 
     if (s.ok())
@@ -843,11 +781,10 @@ namespace leveldb
     }
   }
 
-  // 防止Compaction执行时阻塞LevelDB的正常读写，LevelDB的所有Compaction都通过一个后台线程执行。
-  void DBImpl::MaybeScheduleCompaction()
+  void DBImpl::MaybeScheduleCompaction()   // 时机, 主线程主动触发compact
   {
     mutex_.AssertHeld();
-    if (background_compaction_scheduled_)
+    if (background_compaction_scheduled_) // 已经触发了
     {
       // Already scheduled
     }
@@ -868,19 +805,20 @@ namespace leveldb
     else
     {
       background_compaction_scheduled_ = true;
-      /// 后台Compaction入口
+      
+      /// 后台Compaction入口, 创建一个线程执行&DBImpl::BGWork
       env_->Schedule(&DBImpl::BGWork, this);
     }
   }
 
-  void DBImpl::BGWork(void *db)
+  void DBImpl::BGWork(void *db) // 后台工作
   {
     reinterpret_cast<DBImpl *>(db)->BackgroundCall();
   }
 
-  void DBImpl::BackgroundCall()
+  void DBImpl::BackgroundCall() // 后台执行的功能
   {
-    MutexLock l(&mutex_);
+    MutexLock l(&mutex_); // 一次只能一个线程进入
     assert(background_compaction_scheduled_);
     if (shutting_down_.load(std::memory_order_acquire))
     {
@@ -892,7 +830,7 @@ namespace leveldb
     }
     else
     {
-      BackgroundCompaction();
+      BackgroundCompaction(); // 后台Compaction minor major
     }
 
     background_compaction_scheduled_ = false;
@@ -903,24 +841,24 @@ namespace leveldb
     background_work_finished_signal_.SignalAll();
   }
 
-  /// 后台Compaction
-  void DBImpl::BackgroundCompaction()
+
+  void DBImpl::BackgroundCompaction()   // 后台Compaction
   {
-    mutex_.AssertHeld();
+    mutex_.AssertHeld();  // 确信持有锁
 
     if (imm_ != nullptr)
     {
-      CompactMemTable();
+      CompactMemTable();  // 执行minor compact
       return;
     }
 
     Compaction *c;
     bool is_manual = (manual_compaction_ != nullptr);
     InternalKey manual_end;
-    if (is_manual)
+    if (is_manual)  // 手动触发
     {
       ManualCompaction *m = manual_compaction_;
-      c = versions_->CompactRange(m->level, m->begin, m->end);
+      c = versions_->CompactRange(m->level, m->begin, m->end);  // 手动触发CompactRange某个范围, 找到合适的level file放在c中
       m->done = (c == nullptr);
       if (c != nullptr)
       {
@@ -935,23 +873,24 @@ namespace leveldb
     }
     else
     {
-      c = versions_->PickCompaction();
+      c = versions_->PickCompaction();  // PickCompaction筛选Version中合适的 level 及 文件
     }
-
+    // 基于c的major compaction
     Status status;
     if (c == nullptr)
     {
       // Nothing to do
     }
-    else if (!is_manual && c->IsTrivialMove())
+    else if (!is_manual && c->IsTrivialMove())  // 只需要移动文件, 上下层文件没有重叠
     {
-      // Move file to next level
+      // Move file to next level, 通过操作Version的文件
       assert(c->num_input_files(0) == 1);
-      FileMetaData *f = c->input(0, 0);
+      FileMetaData *f = c->input(0, 0); // addfile, deletefile放在c->edit()中
       c->edit()->DeleteFile(c->level(), f->number);
       c->edit()->AddFile(c->level() + 1, f->number, f->file_size,
                          f->smallest, f->largest);
-      status = versions_->LogAndApply(c->edit(), &mutex_);
+      
+      status = versions_->LogAndApply(c->edit(), &mutex_);  // 基于versionedit形成新的Version
       if (!status.ok())
       {
         RecordBackgroundError(status);
@@ -964,10 +903,11 @@ namespace leveldb
           status.ToString().c_str(),
           versions_->LevelSummary(&tmp));
     }
-    else
+    else  // 如果不同层文件有重叠, 可能要合并文件, 耗时
     {
       CompactionState *compact = new CompactionState(c);
-      status = DoCompactionWork(compact);
+      status = DoCompactionWork(compact); // 多路归并，生成新的文件
+      
       if (!status.ok())
       {
         RecordBackgroundError(status);
@@ -1137,14 +1077,13 @@ namespace leveldb
       const CompactionState::Output &out = compact->outputs[i];
       compact->compaction->edit()->AddFile(
           level + 1,
-          out.number, out.file_size, out.smallest, out.largest);
+          out.number, out.file_size, out.smallest, out.largest);  // versionedit新加入的文件
     }
+    // major compaction结果放入version
     return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
   }
 
-
-  /// Major Compaction
-  Status DBImpl::DoCompactionWork(CompactionState *compact)
+  Status DBImpl::DoCompactionWork(CompactionState *compact) // 多路归并compact sst操作
   {
     const uint64_t start_micros = env_->NowMicros();
     int64_t imm_micros = 0; // Micros spent doing imm_ compactions
@@ -1198,7 +1137,7 @@ namespace leveldb
       if (compact->compaction->ShouldStopBefore(key) &&
           compact->builder != nullptr)
       {
-        status = FinishCompactionOutputFile(compact, input);
+        status = FinishCompactionOutputFile(compact, input);  // 归并输出文件
         if (!status.ok())
         {
           break;
@@ -1324,12 +1263,13 @@ namespace leveldb
 
     if (status.ok())
     {
-      status = InstallCompactionResults(compact);
+      status = InstallCompactionResults(compact); // compaction结果整合, 新建version放入
     }
     if (!status.ok())
     {
       RecordBackgroundError(status);
     }
+
     VersionSet::LevelSummaryStorage tmp;
     Log(options_.info_log,
         "compacted to: %s", versions_->LevelSummary(&tmp));
@@ -1411,7 +1351,7 @@ namespace leveldb
                      std::string *value)
   {
     Status s;
-    MutexLock l(&mutex_);
+    MutexLock l(&mutex_); // 获得互斥锁
     SequenceNumber snapshot;
     if (options.snapshot != nullptr)
     {
@@ -1420,13 +1360,13 @@ namespace leveldb
     }
     else
     {
-      snapshot = versions_->LastSequence();
+      snapshot = versions_->LastSequence(); // VersionSet的某个Sequence可以作为版本之snapshot
     }
 
     MemTable *mem = mem_;
     MemTable *imm = imm_;
-    Version *current = versions_->current();
-    mem->Ref();
+    Version *current = versions_->current();  // 当前版本
+    mem->Ref(); // 对象引用
     if (imm != nullptr)
       imm->Ref();
     current->Ref();
@@ -1438,12 +1378,12 @@ namespace leveldb
     {
       mutex_.Unlock();
       // First look in the memtable, then in the immutable memtable (if any).
-      LookupKey lkey(key, snapshot);
-      if (mem->Get(lkey, value, &s))
+      LookupKey lkey(key, snapshot);  // 要查找的key, snapshot表示查找key的seq不能超过snapshot
+      if (mem->Get(lkey, value, &s))  // 从mem得到key
       {
         // Done
       }
-      else if (imm != nullptr && imm->Get(lkey, value, &s))
+      else if (imm != nullptr && imm->Get(lkey, value, &s)) // 从imm查找key
       {
         // Done
       }
@@ -1457,9 +1397,9 @@ namespace leveldb
 
     if (have_stat_update && current->UpdateStats(stats))
     {
-      MaybeScheduleCompaction();
+      MaybeScheduleCompaction();  // 可能定时Compaction执行
     }
-    mem->Unref();
+    mem->Unref(); // 减少引用
     if (imm != nullptr)
       imm->Unref();
     current->Unref();
@@ -1510,10 +1450,11 @@ namespace leveldb
   {
     return DB::Delete(options, key);
   }
-  /// 将WriteBatch写入
+
+  // 将WriteBatch写入
   Status DBImpl::Write(const WriteOptions &options, WriteBatch *my_batch)
   {
-    /// Writer类
+    /// Writer对象 w, 用Mutex构建
     Writer w(&mutex_);
     w.batch = my_batch;
     w.sync = options.sync;
@@ -1531,12 +1472,12 @@ namespace leveldb
     }
 
     // May temporarily unlock and wait.
-    Status status = MakeRoomForWrite(my_batch == nullptr);
+    Status status = MakeRoomForWrite(my_batch == nullptr);  // 增加写的空间
     uint64_t last_sequence = versions_->LastSequence();
     Writer *last_writer = &w;
     if (status.ok() && my_batch != nullptr)
     { // nullptr batch is for compactions
-      WriteBatch *updates = BuildBatchGroup(&last_writer);
+      WriteBatch *updates = BuildBatchGroup(&last_writer);  // Writer构建WriteBatch* updates
       WriteBatchInternal::SetSequence(updates, last_sequence + 1);
       last_sequence += WriteBatchInternal::Count(updates);
 
@@ -1545,10 +1486,8 @@ namespace leveldb
       // and protects against concurrent loggers and concurrent writes
       // into mem_.
       {
-        /// 同步
         mutex_.Unlock();
-        /// 写入到日志
-        status = log_->AddRecord(WriteBatchInternal::Contents(updates));
+        status = log_->AddRecord(WriteBatchInternal::Contents(updates));  // 先将记录追加入日志
         bool sync_error = false;
         if (status.ok() && options.sync)
         {
@@ -1561,8 +1500,7 @@ namespace leveldb
 
         if (status.ok())
         {
-          /// 写入到mem_中
-          status = WriteBatchInternal::InsertInto(updates, mem_);
+          status = WriteBatchInternal::InsertInto(updates, mem_); // update记录写入memtable中
         }
         mutex_.Lock();
         if (sync_error)
@@ -1576,7 +1514,7 @@ namespace leveldb
       if (updates == tmp_batch_)
         tmp_batch_->Clear();
 
-      versions_->SetLastSequence(last_sequence);
+      versions_->SetLastSequence(last_sequence);  // 版本操作序列号
     }
 
     while (true)
@@ -1715,6 +1653,7 @@ namespace leveldb
         assert(versions_->PrevLogNumber() == 0);
         uint64_t new_log_number = versions_->NewFileNumber();
         WritableFile *lfile = nullptr;
+        
         s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
         if (!s.ok())
         {
@@ -1877,47 +1816,41 @@ namespace leveldb
     *dbptr = nullptr;
 
     DBImpl *impl = new DBImpl(options, dbname);
-    impl->mutex_.Lock();
+    impl->mutex_.Lock();  // 互斥锁
     VersionEdit edit;
     // Recover handles create_if_missing, error_if_exists
     bool save_manifest = false;
 
-    /// Recover恢复数据库, 实际上根据日志恢复memtable
-    Status s = impl->Recover(&edit, &save_manifest);
+    Status s = impl->Recover(&edit, &save_manifest);     // Recover恢复数据库, 实际上根据恢复current Version, 日志恢复memtable
     if (s.ok() && impl->mem_ == nullptr)
     {
       // Create new log and a corresponding memtable.
       uint64_t new_log_number = impl->versions_->NewFileNumber();
       WritableFile *lfile;
-
-      /// 创建可写文件, *lfile指向之
       s = options.env->NewWritableFile(LogFileName(dbname, new_log_number),
-                                       &lfile);
+                                       &lfile);       /// 创建可写文件 *lfile
       if (s.ok())
       {
         edit.SetLogNumber(new_log_number);
         impl->logfile_ = lfile;
         impl->logfile_number_ = new_log_number;
-        /// lfile, log写入该文件
-        impl->log_ = new log::Writer(lfile);
-        /// impl->mem_
-        impl->mem_ = new MemTable(impl->internal_comparator_);
-        /// MemTable, 引用计数。引用计数为0时会被delete
+
+        impl->log_ = new log::Writer(lfile);   // 可以写入文件lfile log的Write对象
+
+        impl->mem_ = new MemTable(impl->internal_comparator_);    // impl->mem_ 应该是mutable MemTable
         impl->mem_->Ref();
       }
     }
-    if (s.ok() && save_manifest)
+    if (s.ok() && save_manifest)  // 恢复过程中产生了save_manifest, 生成一个新Version
     {
       edit.SetPrevLogNumber(0); // No older logs needed after recovery.
       edit.SetLogNumber(impl->logfile_number_);
-      /// 根据VersionEdit生成新Version并放入VersionSet
-      /// 每个VersionSet记录当前memtable新增记录的Log, 以及SST新增的文件
-      s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
+      s = impl->versions_->LogAndApply(&edit, &impl->mutex_); // 新建一个Version 
     }
     if (s.ok())
     {
       impl->DeleteObsoleteFiles();
-      impl->MaybeScheduleCompaction();
+      impl->MaybeScheduleCompaction();  // 运行后台进程, 可能执行compaction等
     }
     impl->mutex_.Unlock();
     if (s.ok())
@@ -1936,32 +1869,11 @@ namespace leveldb
   {
   }
 
-  /// 删除DB
-  Status DestroyDB(const std::string &dbname, const Options &options)
+
+  Status DestroyDB(const std::string &dbname, const Options &options)   // 删除DB
   {
     Env *env = options.env;
     std::vector<std::string> filenames;
-
-    ///DB下的文件有, xxx.ldb、xxx.log、LOG、MANIFEST-xxx、LOCK、CURRENT
-    /// 日志文件 xxx.log
-    /// xxx.log文件包括最近存储的数据序列，大小是乱序的，当xxx.log文件达到一定的大小(默认4MB)，就会被转换成Sorted tables有序表文件。
-    ///这个日志文件对应内存中当前的memtable，可用来恢复memtable, 当这个memtable满了后，会被写到level-0，对应的xxx.log文件会被删除，新的xxx.log会被生成，对应于新的memtable。
-
-    /// SSTable xxx.ldb
-    /// SST是Sorted Strings Table的缩写，levelDB中，对应的文件格式是ldb。 一个文件只可能属于一个level
-    //// level-0外，各个level的文件总大小是预先设定的，level-1 10MB，level-2 100MB. level0可能重叠, 其他level不重叠
-
-    /// MANIFEST
-    /// 从xxx.ldb文件名和大小无法判断其所属level，那么就要有一个额外的文件存储这些“元信息”。MANIFEST-xxx文件就负责存储哪个文件属于哪个level
-
-    /// CURRENT
-    /// 只存了一个编号，这个编号就是某个MANIFEST文件的后缀，用来指明当前所用的是哪个MANIFEST文件。
-
-    /// LOG
-    /// DB运行过程中打印出的各种日志信息。
-
-    ///锁文件 LOCK
-    /// 顾名思义，一个用文件实现的锁，一个DB同时只能被一个进程上锁
     Status result = env->GetChildren(dbname, &filenames);
     if (!result.ok())
     {
@@ -1977,11 +1889,10 @@ namespace leveldb
       uint64_t number;
       FileType type;
 
-      /// 删除db下的文件
+      // 删除db下的文件
       for (size_t i = 0; i < filenames.size(); i++)
       {
-        /// 解析文件类型
-        if (ParseFileName(filenames[i], &number, &type) &&
+        if (ParseFileName(filenames[i], &number, &type) &&         // 解析文件类型
             type != kDBLockFile)
         { // Lock file will be deleted at end
           Status del = env->DeleteFile(dbname + "/" + filenames[i]);
@@ -1992,7 +1903,6 @@ namespace leveldb
         }
       }
 
-      /// 删除锁文件
       env->UnlockFile(lock); // Ignore error since state is already gone
       env->DeleteFile(lockname);
       env->DeleteDir(dbname); // Ignore error in case dir contains other files

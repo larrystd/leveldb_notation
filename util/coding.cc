@@ -17,7 +17,7 @@ void EncodeFixed32(char* buf, uint32_t value) {
   }
 }
 
-void EncodeFixed64(char* buf, uint64_t value) {
+void EncodeFixed64(char* buf, uint64_t value) { // 占据8个字节
   if (port::kLittleEndian) {
     memcpy(buf, &value, sizeof(value));
   } else {

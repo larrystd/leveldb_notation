@@ -35,6 +35,7 @@ struct Table::Rep {
   Block* index_block;
 };
 
+// open table
 Status Table::Open(const Options& options,
                    RandomAccessFile* file,
                    uint64_t size,
@@ -156,10 +157,11 @@ static void ReleaseBlock(void* arg, void* h) {
 
 // Convert an index iterator value (i.e., an encoded BlockHandle)
 // into an iterator over the contents of the corresponding block.
+// 返回一个迭代器, 用来BlockReader
 Iterator* Table::BlockReader(void* arg,
                              const ReadOptions& options,
                              const Slice& index_value) {
-  Table* table = reinterpret_cast<Table*>(arg);
+  Table* table = reinterpret_cast<Table*>(arg); // table对象
   Cache* block_cache = table->rep_->options.block_cache;
   Block* block = nullptr;
   Cache::Handle* cache_handle = nullptr;
@@ -200,7 +202,8 @@ Iterator* Table::BlockReader(void* arg,
 
   Iterator* iter;
   if (block != nullptr) {
-    iter = block->NewIterator(table->rep_->options.comparator);
+    // 迭代器
+    iter = block->NewIterator(table->rep_->options.comparator); // Iterator* iter = new Block::Iter()
     if (cache_handle == nullptr) {
       iter->RegisterCleanup(&DeleteBlock, block, nullptr);
     } else {
@@ -209,6 +212,7 @@ Iterator* Table::BlockReader(void* arg,
   } else {
     iter = NewErrorIterator(s);
   }
+  // Iterator* = new Block::Iter
   return iter;
 }
 
@@ -226,19 +230,21 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
   iiter->Seek(k);
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
-    FilterBlockReader* filter = rep_->filter;
+    FilterBlockReader* filter = rep_->filter; // 布隆过滤器, FilterBlock用于
     BlockHandle handle;
     if (filter != nullptr &&
         handle.DecodeFrom(&handle_value).ok() &&
         !filter->KeyMayMatch(handle.offset(), k)) {
       // Not found
     } else {
-      Iterator* block_iter = BlockReader(this, options, iiter->value());
-      block_iter->Seek(k);
-      if (block_iter->Valid()) {
+      Iterator* block_iter = BlockReader(this, options, iiter->value());  // BlockReader, 返回Block::Iter对象
+      
+      block_iter->Seek(k); // block_iter为Block::Iter对象, 因此->指向Block对象, 相当于调用Block::Seek。二分查找
+      
+      if (block_iter->Valid()) {  // 如果结果有效, 保存结果
         (*saver)(arg, block_iter->key(), block_iter->value());
-      }
-      s = block_iter->status();
+      } // 结果保存在save中
+      s = block_iter->status(); //  调用函数
       delete block_iter;
     }
   }

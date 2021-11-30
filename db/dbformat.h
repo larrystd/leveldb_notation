@@ -14,6 +14,10 @@
 #include "util/coding.h"
 #include "util/logging.h"
 
+// 三种key, User Key读写键值对
+// Internal Key, SST中存储的值, userkey+seq+type 
+// Lookup Key, 用来memtable检索的值, userkey+seq
+
 namespace leveldb {
 
 // Grouping of constants.  We may want to make some of these
@@ -67,7 +71,7 @@ typedef uint64_t SequenceNumber;
 static const SequenceNumber kMaxSequenceNumber =
     ((0x1ull << 56) - 1);
 
-struct ParsedInternalKey {
+struct ParsedInternalKey {  // 基于user_key, sequence, type构建key对象
   Slice user_key;
   SequenceNumber sequence;
   ValueType type;
@@ -102,6 +106,7 @@ inline Slice ExtractUserKey(const Slice& internal_key) {
 // the user key portion and breaks ties by decreasing sequence number.
 class InternalKeyComparator : public Comparator {
  private:
+  // userkey的比较器
   const Comparator* user_comparator_;
  public:
   explicit InternalKeyComparator(const Comparator* c) : user_comparator_(c) { }
@@ -131,22 +136,22 @@ class InternalFilterPolicy : public FilterPolicy {
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
-class InternalKey {
+class InternalKey { // 使用的internal key = userkey+seq+type
  private:
   std::string rep_;
  public:
   InternalKey() { }   // Leave rep_ as empty to indicate it is invalid
-  InternalKey(const Slice& user_key, SequenceNumber s, ValueType t) {
-    AppendInternalKey(&rep_, ParsedInternalKey(user_key, s, t));
+  InternalKey(const Slice& user_key, SequenceNumber s, ValueType t) { // 用Slice, seq, valuetype构建InternalKey
+    AppendInternalKey(&rep_, ParsedInternalKey(user_key, s, t));  // 构建rep_, rep_值为Slice key+size
   }
 
   void DecodeFrom(const Slice& s) { rep_.assign(s.data(), s.size()); }
-  Slice Encode() const {
+  Slice Encode() const {  // 返回rep_
     assert(!rep_.empty());
-    return rep_;
+    return rep_;  
   }
 
-  Slice user_key() const { return ExtractUserKey(rep_); }
+  Slice user_key() const { return ExtractUserKey(rep_); } // 从rep_提取出user_key
 
   void SetFrom(const ParsedInternalKey& p) {
     rep_.clear();
@@ -158,6 +163,7 @@ class InternalKey {
   std::string DebugString() const;
 };
 
+// InternalKey的比较器
 inline int InternalKeyComparator::Compare(
     const InternalKey& a, const InternalKey& b) const {
   return Compare(a.Encode(), b.Encode());
@@ -175,8 +181,8 @@ inline bool ParseInternalKey(const Slice& internal_key,
   return (c <= static_cast<unsigned char>(kTypeValue));
 }
 
-// A helper class useful for DBImpl::Get()
-class LookupKey {
+// A helper class useful for DBImpl::Get(), 用来对memtable查询的key
+class LookupKey { // lookupkey userkey+seq
  public:
   // Initialize *this for looking up user_key at a snapshot with
   // the specified sequence number.
@@ -189,10 +195,10 @@ class LookupKey {
 
   /// internalkey = uKey + sequence_number(7 bytes) + type(1 byte)
   // Return an internal key (suitable for passing to an internal iterator)
-  Slice internal_key() const { return Slice(kstart_, end_ - kstart_); }
+  Slice internal_key() const { return Slice(kstart_, end_ - kstart_); } // Lookupkey可得到internal_key
 
   // Return the user key
-  Slice user_key() const { return Slice(kstart_, end_ - kstart_ - 8); }
+  Slice user_key() const { return Slice(kstart_, end_ - kstart_ - 8); } // 得到user_key
 
  private:
   // We construct a char array of the form:

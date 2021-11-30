@@ -79,10 +79,9 @@ Iterator* MemTable::NewIterator() {
   return new MemTableIterator(&table_);
 }
 
-//// 在memtable中添加数据
 void MemTable::Add(SequenceNumber s, ValueType type,
                    const Slice& key,
-                   const Slice& value) {
+                   const Slice& value) {  // 添加数据到跳跃表
   // Format of an entry is concatenation of:
   //  key_size     : varint32 of internal_key.size()
   //  key bytes    : char[internal_key.size()]
@@ -105,13 +104,14 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   assert(p + val_size == buf + encoded_len);
 
   // typedef SkipList<const char*, KeyComparator> Table;
-  table_.Insert(buf);
+  table_.Insert(buf); // 数据插入到跳跃表中
 }
 
-bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
+bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) { // MemTable检索, 就是从跳跃表中检索
   Slice memkey = key.memtable_key();
-  Table::Iterator iter(&table_);
-  iter.Seek(memkey.data());
+  Table::Iterator iter(&table_);  // Table::Iterator 跳跃表迭代器
+  iter.Seek(memkey.data()); // 跳跃表中查找key
+  
   if (iter.Valid()) {
     // entry format is:
     //    klength  varint32

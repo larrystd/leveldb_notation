@@ -39,7 +39,7 @@ namespace leveldb {
 class Arena;
 
 template<typename Key, class Comparator>
-class SkipList {
+class SkipList {  // 跳跃表
  private:
   struct Node;
 
@@ -90,7 +90,7 @@ class SkipList {
     void SeekToLast();
 
    private:
-    const SkipList* list_;
+    const SkipList* list_;  // 维护的跳跃表
     Node* node_;
     // Intentionally copyable
   };
@@ -181,7 +181,7 @@ struct SkipList<Key, Comparator>::Node {
 
 template<typename Key, class Comparator>
 typename SkipList<Key, Comparator>::Node*
-SkipList<Key, Comparator>::NewNode(const Key& key, int height) {
+SkipList<Key, Comparator>::NewNode(const Key& key, int height) {  // 新建跳跃表节点
   char* const node_memory = arena_->AllocateAligned(
       sizeof(Node) + sizeof(std::atomic<Node*>) * (height - 1));
   return new (node_memory) Node(key);
@@ -223,6 +223,7 @@ inline void SkipList<Key, Comparator>::Iterator::Prev() {
 
 template<typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::Seek(const Key& target) {
+  // 查找>= target的key
   node_ = list_->FindGreaterOrEqual(target, nullptr);
 }
 
@@ -240,7 +241,7 @@ inline void SkipList<Key, Comparator>::Iterator::SeekToLast() {
 }
 
 template<typename Key, class Comparator>
-int SkipList<Key, Comparator>::RandomHeight() {
+int SkipList<Key, Comparator>::RandomHeight() { // 随机设置高度
   // Increase height with probability 1 in kBranching
   static const unsigned int kBranching = 4;
   int height = 1;
@@ -253,7 +254,7 @@ int SkipList<Key, Comparator>::RandomHeight() {
 }
 
 template<typename Key, class Comparator>
-bool SkipList<Key, Comparator>::KeyIsAfterNode(const Key& key, Node* n) const {
+bool SkipList<Key, Comparator>::KeyIsAfterNode(const Key& key, Node* n) const { 
   // null n is considered infinite
   return (n != nullptr) && (compare_(n->key, key) < 0);
 }
@@ -262,19 +263,19 @@ template<typename Key, class Comparator>
 typename SkipList<Key, Comparator>::Node*
 SkipList<Key, Comparator>::FindGreaterOrEqual(const Key& key,
                                               Node** prev) const {
-  Node* x = head_;
-  int level = GetMaxHeight() - 1;
+  Node* x = head_;  // 头节点
+  int level = GetMaxHeight() - 1; // 从最高层开始
   while (true) {
     Node* next = x->Next(level);
     if (KeyIsAfterNode(key, next)) {
       // Keep searching in this list
-      x = next;
+      x = next; // 这层还需要前进
     } else {
       if (prev != nullptr) prev[level] = x;
       if (level == 0) {
-        return next;
+        return next;  // 已经是最后一层
       } else {
-        // Switch to next list
+        // Switch to next list 下沉一层
         level--;
       }
     }
@@ -334,9 +335,8 @@ SkipList<Key, Comparator>::SkipList(Comparator cmp, Arena* arena)
   }
 }
 
-/// 从跳表中插入元素
 template<typename Key, class Comparator>
-void SkipList<Key, Comparator>::Insert(const Key& key) {
+void SkipList<Key, Comparator>::Insert(const Key& key) { // 从跳表中插入元素
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
   Node* prev[kMaxHeight];
@@ -345,7 +345,7 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
   // Our data structure does not allow duplicate insertion
   assert(x == nullptr || !Equal(key, x->key));
 
-  int height = RandomHeight();
+  int height = RandomHeight();  // 随机生成高度
   if (height > GetMaxHeight()) {
     for (int i = GetMaxHeight(); i < height; i++) {
       prev[i] = head_;
@@ -360,12 +360,13 @@ void SkipList<Key, Comparator>::Insert(const Key& key) {
     max_height_.store(height, std::memory_order_relaxed);
   }
 
-  x = NewNode(key, height);
+  x = NewNode(key, height); // 新建跳跃表节点
   for (int i = 0; i < height; i++) {
     // NoBarrier_SetNext() suffices since we will add a barrier when
-    // we publish a pointer to "x" in prev[i].
-    x->NoBarrier_SetNext(i, prev[i]->NoBarrier_Next(i));
-    prev[i]->SetNext(i, x);
+    // we publish a pointer to "x" in prev[i].'
+    // x插入该层的链表
+    x->NoBarrier_SetNext(i, prev[i]->NoBarrier_Next(i));  // x在i层的next节点为prev->next
+    prev[i]->SetNext(i, x); // 设置prev[i]节点在该层的next节点为x
   }
 }
 

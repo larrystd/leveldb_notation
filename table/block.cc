@@ -20,7 +20,7 @@ inline uint32_t Block::NumRestarts() const {
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
 }
 
-Block::Block(const BlockContents& contents)
+Block::Block(const BlockContents& contents) // 构造Block
     : data_(contents.data.data()),
       size_(contents.data.size()),
       owned_(contents.heap_allocated) {
@@ -73,7 +73,7 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
   return p;
 }
 
-class Block::Iter : public Iterator {
+class Block::Iter : public Iterator { // Block的内部类Block::Iter
  private:
   const Comparator* const comparator_;
   const char* const data_;      // underlying block contents
@@ -123,9 +123,10 @@ class Block::Iter : public Iterator {
         current_(restarts_),
         restart_index_(num_restarts_) {
     assert(num_restarts_ > 0);
-  }
+  } // 构造Block::Iter
 
-  virtual bool Valid() const { return current_ < restarts_; }
+  virtual bool Valid() const { return current_ < restarts_; } // 结果有效
+
   virtual Status status() const { return status_; }
   virtual Slice key() const {
     assert(Valid());
@@ -162,6 +163,7 @@ class Block::Iter : public Iterator {
     } while (ParseNextKey() && NextEntryOffset() < original);
   }
 
+  // 二分查找, 在table中寻找target
   virtual void Seek(const Slice& target) {
     // Binary search in restart array to find the last restart point
     // with a key < target
@@ -171,6 +173,7 @@ class Block::Iter : public Iterator {
       uint32_t mid = (left + right + 1) / 2;
       uint32_t region_offset = GetRestartPoint(mid);
       uint32_t shared, non_shared, value_length;
+      // 解码Entry
       const char* key_ptr = DecodeEntry(data_ + region_offset,
                                         data_ + restarts_,
                                         &shared, &non_shared, &value_length);
@@ -179,6 +182,7 @@ class Block::Iter : public Iterator {
         return;
       }
       Slice mid_key(key_ptr, non_shared);
+      // 二分查找, 会跳出循环
       if (Compare(mid_key, target) < 0) {
         // Key at "mid" is smaller than "target".  Therefore all
         // blocks before "mid" are uninteresting.
@@ -253,7 +257,7 @@ class Block::Iter : public Iterator {
   }
 };
 
-Iterator* Block::NewIterator(const Comparator* cmp) {
+Iterator* Block::NewIterator(const Comparator* cmp) { // 返回一个Block::Iter
   if (size_ < sizeof(uint32_t)) {
     return NewErrorIterator(Status::Corruption("bad block contents"));
   }

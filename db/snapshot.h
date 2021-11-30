@@ -14,6 +14,7 @@ class SnapshotList;
 
 // Snapshots are kept in a doubly-linked list in the DB.
 // Each SnapshotImpl corresponds to a particular sequence number.
+// 快照以seq实现, 即保持小于某seq的状态即为快照
 class SnapshotImpl : public Snapshot {
  public:
   SnapshotImpl(SequenceNumber sequence_number)
@@ -36,7 +37,7 @@ class SnapshotImpl : public Snapshot {
 #endif  // !defined(NDEBUG)
 };
 
-class SnapshotList {
+class SnapshotList {  // snapshot维护的链表
  public:
   SnapshotList() : head_(0) {
     head_.prev_ = &head_;

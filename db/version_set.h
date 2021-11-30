@@ -55,9 +55,8 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            const Slice* smallest_user_key,
                            const Slice* largest_user_key);
 
-/// Version, 记录当前数据库储存的文件
-/// Version 只记录SST的文件, 没有memtable的log文件
-class Version {
+
+class Version {  // 版本
  public:
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
@@ -68,7 +67,7 @@ class Version {
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
   struct GetStats {
-    FileMetaData* seek_file;
+    FileMetaData* seek_file;  
     int seek_file_level;
   };
   Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
@@ -87,7 +86,7 @@ class Version {
 
   // Reference count management (so Versions do not disappear out from
   // under live iterators)
-  void Ref();
+  void Ref(); // 引用计数
   void Unref();
 
   void GetOverlappingInputs(
@@ -108,15 +107,15 @@ class Version {
   // result that covers the range [smallest_user_key,largest_user_key].
   int PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                  const Slice& largest_user_key);
-
+  // Version, 每个level存储的files
   int NumFiles(int level) const { return files_[level].size(); }
 
   // Return a human readable string that describes this version's contents.
   std::string DebugString() const;
 
  private:
-  friend class Compaction;
-  friend class VersionSet;
+  friend class Compaction;  // Compaction是Version的friend
+  friend class VersionSet;  // VersionSet是Version的friend
 
   class LevelFileNumIterator;
   Iterator* NewConcatenatingIterator(const ReadOptions&, int level) const;
@@ -130,26 +129,26 @@ class Version {
                           void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  /// 储存VersionSet指针和在VersionSet中的位置
+  /// Version所属的VersionSet
   VersionSet* vset_;            // VersionSet to which this Version belongs
+  // Version是用双向链表维护的
   Version* next_;               // Next version in linked list
   Version* prev_;               // Previous version in linked list
   int refs_;                    // Number of live refs to this version
 
-  // List of files per level
-  /// Version存储的文件
+  // List of files per level Version存储的文件元数据, 分level存储, 每个level都有一个vector,
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
-  FileMetaData* file_to_compact_;
+  FileMetaData* file_to_compact_; // 当前Version需要compact
   int file_to_compact_level_;
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
   double compaction_score_;
-  int compaction_level_;
-
+  int compaction_level_;  // compact应该从哪一层开始
+  // Version 用Versionset构造
   explicit Version(VersionSet* vset)
       : vset_(vset), next_(this), prev_(this), refs_(0),
         file_to_compact_(nullptr),
@@ -165,6 +164,7 @@ class Version {
   void operator=(const Version&);
 };
 
+// Version集合
 class VersionSet {
  public:
   VersionSet(const std::string& dbname,
@@ -184,10 +184,10 @@ class VersionSet {
   // Recover the last saved descriptor from persistent storage.
   Status Recover(bool *save_manifest);
 
-  // Return the current version.
+  // Return the current version.  当前的版本
   Version* current() const { return current_; }
 
-  // Return the current manifest file number
+  // Return the current manifest file number 
   uint64_t ManifestFileNumber() const { return manifest_file_number_; }
 
   // Allocate and return a new file number
@@ -202,7 +202,7 @@ class VersionSet {
     }
   }
 
-  // Return the number of Table files at the specified level.
+  // Return the number of Table files at the specified level. 某个level的table文件数目
   int NumLevelFiles(int level) const;
 
   // Return the combined file size of all files at the specified level.
@@ -220,7 +220,7 @@ class VersionSet {
   // Mark the specified file number as used.
   void MarkFileNumberUsed(uint64_t number);
 
-  // Return the current log file number.
+  // Return the current log file number. 当前日志序号
   uint64_t LogNumber() const { return log_number_; }
 
   // Return the log file number for the log file that is currently
@@ -301,6 +301,7 @@ class VersionSet {
   const std::string dbname_;
   const Options* const options_;
   TableCache* const table_cache_;
+  // internalkey的比较器
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
   uint64_t manifest_file_number_;
@@ -313,7 +314,7 @@ class VersionSet {
   log::Writer* descriptor_log_;
 
   Version dummy_versions_;  // Head of circular doubly-linked list of versions.
-  Version* current_;        // == dummy_versions_.prev_, current version
+  Version* current_;        // == dummy_versions_.prev_, current version 位于Version的当前版本
 
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
@@ -325,12 +326,12 @@ class VersionSet {
 };
 
 // A Compaction encapsulates information about a compaction.
-class Compaction {
+class Compaction {  // 执行compaction的一些参数, 例如file, level等
  public:
   ~Compaction();
 
   // Return the level that is being compacted.  Inputs from "level"
-  // and "level+1" will be merged to produce a set of "level+1" files.
+  // and "level+1" will be merged to produce a set of "level+1" files. 正在compact的level
   int level() const { return level_; }
 
   // Return the object that holds the edits to the descriptor done

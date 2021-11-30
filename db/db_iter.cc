@@ -79,6 +79,7 @@ class DBIter: public Iterator {
     }
   }
 
+  // 操作, next prev, seek
   virtual void Next();
   virtual void Prev();
   virtual void Seek(const Slice& target);
@@ -173,6 +174,7 @@ void DBIter::Next() {
   FindNextUserEntry(true, &saved_key_);
 }
 
+// 使用O(n)的遍历查找目标entry
 void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
   // Loop until we hit an acceptable entry to yield
   assert(iter_->Valid());
@@ -181,7 +183,7 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
     ParsedInternalKey ikey;
     if (ParseKey(&ikey) && ikey.sequence <= sequence_) {
       switch (ikey.type) {
-        case kTypeDeletion:
+        case kTypeDeletion: // 跳过delete标志
           // Arrange to skip all upcoming entries for this key since
           // they are hidden by this deletion.
           SaveKey(ikey.user_key, skip);

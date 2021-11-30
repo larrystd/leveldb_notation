@@ -11,15 +11,13 @@
 #include "leveldb/iterator.h"
 #include "leveldb/options.h"
 
-
-// 数据库接口
 namespace leveldb {
 
 // Update CMakeLists.txt if you change these
 static const int kMajorVersion = 1;
 static const int kMinorVersion = 21;
 
-/// 声明类
+// 前向声明
 struct Options;
 struct ReadOptions;
 struct WriteOptions;
@@ -28,14 +26,14 @@ class WriteBatch;
 // Abstract handle to particular state of a DB.
 // A Snapshot is an immutable object and can therefore be safely
 // accessed from multiple threads without any external synchronization.
-/// Snapshot 快照是不可变的对象, 线程安全
+/// Snapshot 快照是表示某个时刻的数据库
 class LEVELDB_EXPORT Snapshot {
  protected:
   virtual ~Snapshot();
 };
 
 // A range of keys
-/// key范围, 输入为Slice
+// 表示key范围, [start, limit)
 struct LEVELDB_EXPORT Range {
   Slice start;          // Included in the range
   Slice limit;          // Not included in the range
@@ -47,7 +45,7 @@ struct LEVELDB_EXPORT Range {
 // A DB is a persistent ordered map from keys to values.
 // A DB is safe for concurrent access from multiple threads without
 // any external synchronization.
-/// 排序后的key-value数据库, 线程安全
+/// 数据库, 最外层, 向用户提供接口
 class LEVELDB_EXPORT DB {
  public:
   // Open the database with the specified "name".
@@ -55,14 +53,14 @@ class LEVELDB_EXPORT DB {
   // OK on success.
   // Stores nullptr in *dbptr and returns a non-OK status on error.
   // Caller should delete *dbptr when it is no longer needed.
-  /// dbptr是数据库指针, 该指针可修改, 故传指针的指针
+  // 打开一个数据库, 返回状态
   static Status Open(const Options& options,
                      const std::string& name,
-                     DB** dbptr); // DB::OPEN是static的
+                     DB** dbptr);
   /// 构造函数
   DB() = default;
 
-  /// DB不可拷贝
+  /// DB不可拷贝赋值
   DB(const DB&) = delete;
   DB& operator=(const DB&) = delete;
   /// 虚析构函数
@@ -80,7 +78,7 @@ class LEVELDB_EXPORT DB {
   // success, and a non-OK status on error.  It is not an error if "key"
   // did not exist in the database.
   // Note: consider setting options.sync = true.
-  /// Delete也是写操作, 删除键值对
+  /// Delete也是写操作, 写入一个delete mark用来删除键值对
   virtual Status Delete(const WriteOptions& options, const Slice& key) = 0;
 
   // Apply the specified updates to the database.
@@ -96,25 +94,24 @@ class LEVELDB_EXPORT DB {
   // a status for which Status::IsNotFound() returns true.
   //
   // May return some other Status on an error.
-  // 读操作, 
+  // 读操作, 根据key读取value, 返回状态
   virtual Status Get(const ReadOptions& options,
                      const Slice& key, std::string* value) = 0;
 
   // Return a heap-allocated iterator over the contents of the database.
-  // 返回db的迭代器
   // The result of NewIterator() is initially invalid (caller must
   // call one of the Seek methods on the iterator before using it).
   //
   // Caller should delete the iterator when it is no longer needed.
   // The returned iterator should be deleted before this db is deleted.
+  // 迭代器
   virtual Iterator* NewIterator(const ReadOptions& options) = 0;
 
   // Return a handle to the current DB state.  Iterators created with
   // this handle will all observe a stable snapshot of the current DB
   // state.  The caller must call ReleaseSnapshot(result) when the
   // snapshot is no longer needed.
-  // 当前db状态的快照
-  virtual const Snapshot* GetSnapshot() = 0;
+  virtual const Snapshot* GetSnapshot() = 0;  // 创建快照
 
   // Release a previously acquired snapshot.  The caller must not
   // use "snapshot" after this call.

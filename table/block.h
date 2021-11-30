@@ -14,7 +14,7 @@ namespace leveldb {
 struct BlockContents;
 class Comparator;
 
-class Block {
+class Block { // 块对象
  public:
   // Initialize the block with the specified contents.
   explicit Block(const BlockContents& contents);

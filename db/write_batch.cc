@@ -43,7 +43,7 @@ size_t WriteBatch::ApproximateSize() const {
   return rep_.size();
 }
 
-Status WriteBatch::Iterate(Handler* handler) const {
+Status WriteBatch::Iterate(Handler* handler) const {  // WriteBatch将数据写入到memtable中, handler是MemTableInserter
   Slice input(rep_);
   if (input.size() < kHeader) {
     return Status::Corruption("malformed WriteBatch (too small)");
@@ -61,8 +61,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       case kTypeValue:
         if (GetLengthPrefixedSlice(&input, &key) &&
             GetLengthPrefixedSlice(&input, &value)) {
-          /// 写入
-          handler->Put(key, value);
+          handler->Put(key, value); // 写入
         } else {
           return Status::Corruption("bad WriteBatch Put");
         }
@@ -101,7 +100,7 @@ void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq) {
   EncodeFixed64(&b->rep_[0], seq);
 }
 
-void WriteBatch::Put(const Slice& key, const Slice& value) {
+void WriteBatch::Put(const Slice& key, const Slice& value) {  // 将Slice key放入到WriteBatch中
   WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
   rep_.push_back(static_cast<char>(kTypeValue));
   /// 序列化
@@ -120,14 +119,14 @@ void WriteBatch::Append(const WriteBatch &source) {
 }
 
 namespace {
-/// 在MemTable增加数据
-class MemTableInserter : public WriteBatch::Handler {
+
+class MemTableInserter : public WriteBatch::Handler { // 在MemTable增加数据
  public:
   SequenceNumber sequence_;
   MemTable* mem_;
 
   virtual void Put(const Slice& key, const Slice& value) {
-    mem_->Add(sequence_, kTypeValue, key, value);
+    mem_->Add(sequence_, kTypeValue, key, value); // 加入数据到mem_中
     sequence_++;
   }
   virtual void Delete(const Slice& key) {

@@ -42,14 +42,16 @@ TableCache::~TableCache() {
   delete cache_;
 }
 
+//
 Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
                              Cache::Handle** handle) {
   Status s;
   char buf[sizeof(file_number)];
   EncodeFixed64(buf, file_number);
   Slice key(buf, sizeof(buf));
-  *handle = cache_->Lookup(key);
-  if (*handle == nullptr) {
+  *handle = cache_->Lookup(key);  // 尝试直接hash找key
+  
+  if (*handle == nullptr) { // 没有找到
     std::string fname = TableFileName(dbname_, file_number);
     RandomAccessFile* file = nullptr;
     Table* table = nullptr;
@@ -102,6 +104,7 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
   return result;
 }
 
+
 Status TableCache::Get(const ReadOptions& options,
                        uint64_t file_number,
                        uint64_t file_size,
@@ -109,10 +112,12 @@ Status TableCache::Get(const ReadOptions& options,
                        void* arg,
                        void (*saver)(void*, const Slice&, const Slice&)) {
   Cache::Handle* handle = nullptr;
+  // 在TableCache根据file找table
   Status s = FindTable(file_number, file_size, &handle);
   if (s.ok()) {
-    Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
-    s = t->InternalGet(options, k, arg, saver);
+    Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table; // 获得table
+    
+    s = t->InternalGet(options, k, arg, saver); // 基于table的getkey
     cache_->Release(handle);
   }
   return s;

@@ -27,21 +27,21 @@ Status BuildTable(const std::string& dbname,
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {
     WritableFile* file;
-    s = env->NewWritableFile(fname, &file);
+    s = env->NewWritableFile(fname, &file); // WritableFile, SST table
     if (!s.ok()) {
       return s;
     }
 
-    TableBuilder* builder = new TableBuilder(options, file);
+    TableBuilder* builder = new TableBuilder(options, file);  // 用table file创建Table的builder工具
     meta->smallest.DecodeFrom(iter->key());
     for (; iter->Valid(); iter->Next()) {
       Slice key = iter->key();
       meta->largest.DecodeFrom(key);
-      builder->Add(key, iter->value());
+      builder->Add(key, iter->value()); // builder具有了迭代器iter的数据
     }
 
     // Finish and check for builder errors
-    s = builder->Finish();
+    s = builder->Finish();  // builder持久化SST level0 文件中, 应该是顺序写无序的
     if (s.ok()) {
       meta->file_size = builder->FileSize();
       assert(meta->file_size > 0);

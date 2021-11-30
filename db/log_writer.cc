@@ -34,8 +34,7 @@ Writer::~Writer() {
 }
 
 
-/// log文件以32K的物理Block为单位进行操作
-/// log文件可看作是由多个连续的32K的Block
+// log文件以32K的物理Block为单位进行操作
 Status Writer::AddRecord(const Slice& slice) {
   const char* ptr = slice.data();
   size_t left = slice.size();

@@ -118,6 +118,7 @@ bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
   return user_policy_->KeyMayMatch(ExtractUserKey(key), f);
 }
 
+// 用Slice user_key和sequencenumb 构建LookupKey
 LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   size_t usize = user_key.size();
   size_t needed = usize + 13;  // A conservative estimate
@@ -129,12 +130,12 @@ LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   }
   start_ = dst;
   dst = EncodeVarint32(dst, usize + 8);
-  kstart_ = dst;
+  kstart_ = dst;  // internalkey的起始
   memcpy(dst, user_key.data(), usize);
   dst += usize;
-  EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));
-  dst += 8;
-  end_ = dst;
+  EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));  
+  dst += 8; // 8的字节位置放置EncodeFixed64
+  end_ = dst; // internal_key的结束
 }
 
 }  // namespace leveldb

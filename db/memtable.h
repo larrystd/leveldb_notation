@@ -16,7 +16,7 @@ namespace leveldb {
 class InternalKeyComparator;
 class MemTableIterator;
 
-class MemTable {
+class MemTable {  // 跳跃表结构
  public:
   // MemTables are reference counted.  The initial reference count
   // is zero and the caller must call Ref() at least once.
@@ -70,7 +70,7 @@ class MemTable {
   friend class MemTableIterator;
   friend class MemTableBackwardIterator;
 
-  typedef SkipList<const char*, KeyComparator> Table;
+  typedef SkipList<const char*, KeyComparator> Table; // 跳跃表类型
 
   KeyComparator comparator_;
   int refs_;

@@ -47,7 +47,7 @@ static Status DoWriteStringToFile(Env* env, const Slice& data,
   }
   s = file->Append(data);
   if (s.ok() && should_sync) {
-    s = file->Sync();
+    s = file->Sync(); // 写入文件
   }
   if (s.ok()) {
     s = file->Close();

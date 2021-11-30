@@ -18,8 +18,6 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
-
-/// DB 的实现代码
 namespace leveldb {
 
 /// memory table

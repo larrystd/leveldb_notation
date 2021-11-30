@@ -13,21 +13,22 @@
 namespace leveldb {
 
 class VersionSet;
+// VersionEdit 代表一次更新，新增了哪些sstable file，以及删除了哪些sstable filile
+// 一次compaction产生一个VersionEdit, 也是产生一个Version
 
-///VersionEdit的主要作用是当SST变化时, 记录是哪个层的哪个文件发生了变化（如新增删除
-/// 文件元数据
+// 文件元数据， 维护一个文件的元信息
 struct FileMetaData {
   int refs;   // 引用计数
   int allowed_seeks;          // Seeks allowed until compaction
   uint64_t number;
   uint64_t file_size;         // File size in bytes
-  InternalKey smallest;       // Smallest internal key served by table
+  InternalKey smallest;       // Smallest internal key served by table, 
   InternalKey largest;        // Largest internal key served by table
 
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) { }
 };
 
-class VersionEdit {
+class VersionEdit { // 对于Version的操作
  public:
   VersionEdit() { Clear(); }
   ~VersionEdit() { }
@@ -69,7 +70,7 @@ class VersionEdit {
   void AddFile(int level, uint64_t file,
                uint64_t file_size,
                const InternalKey& smallest,
-               const InternalKey& largest) {
+               const InternalKey& largest) {  // VersionEdit增加文件(即执行compaction增加的文件)
     /// 设置file元数据
     FileMetaData f;
     f.number = file;
@@ -80,7 +81,7 @@ class VersionEdit {
   }
 
   // Delete the specified "file" from the specified "level".
-  void DeleteFile(int level, uint64_t file) {
+  void DeleteFile(int level, uint64_t file) { // 要删除的文件
     deleted_files_.insert(std::make_pair(level, file));
   }
 
@@ -100,6 +101,7 @@ class VersionEdit {
   uint64_t prev_log_number_;
   uint64_t next_file_number_;
   SequenceNumber last_sequence_;  // SSTable 中的最大的 sequence number, SequenceNumber越大表示时间越新
+  
   bool has_comparator_;
   bool has_log_number_;
   bool has_prev_log_number_;
